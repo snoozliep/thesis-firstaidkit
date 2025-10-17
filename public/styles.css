@@ -84,8 +84,29 @@ body{
 .inline-list{list-style:none;padding:0;margin:0;display:flex;gap:12px;flex-wrap:wrap}
 .inline-list li{color:var(--muted);font-size:0.95rem}
 .small-muted{color:var(--muted);font-size:0.9rem}
-
-.log-card{margin-top:6px}
+.page main.container {
+    padding-bottom: 160px; /* adjust if you want more/less space */
+}
+.login-card {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 340px;
+    max-width: calc(100% - 48px);
+    z-index: 40;
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(12,16,30,0.12);
+    background: var(--card);
+    /* Remove flow spacing override so fixed positioning is used */
+    margin-top: 0 !important;
+}
+.login-card form{
+    display:flex;
+    gap:8px;
+    flex-direction:column;
+    margin-top:12px;
+}
 .table-wrap{overflow:auto;border-radius:8px}
 .log-table{width:100%;border-collapse:collapse;min-width:700px}
 .log-table thead th{background:linear-gradient(90deg,var(--accent),#2b7bff);color:white;padding:12px;text-align:left;font-weight:600}
@@ -98,11 +119,16 @@ body{
 /* Accessibility & interactions */
 a:focus,a:active,button:focus{outline:3px solid rgba(11,92,255,0.16);outline-offset:2px}
 
-@media (max-width:520px){
-  .container{padding:16px}
-  .title{font-size:1.25rem}
-  .log-table{min-width:480px}
-}
+/* Slightly reduce width on small screens and center at bottom */
+@media (max-width:520px) {
+    .login-card {
+        right: 50%;
+        transform: translateX(50%);
+        left: 50%;
+        bottom: 16px;
+        width: min(92%, 420px);
+    }
+  }
 
 /* Print friendly */
 @media print{
