@@ -90,4 +90,28 @@
         </footer>
     </div>
 </body>
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyDNneb6zniUzuIfrQYBrTWW2ZrZ7cetyyQ",
+    authDomain: "final-pill.firebaseapp.com",
+    databaseURL: "https://final-pill-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "final-pill",
+    storageBucket: "final-pill.firebasestorage.app",
+    messagingSenderId: "108593818831",
+    appId: "1:108593818831:web:bd0af02600ab7a6b8d1bba",
+    measurementId: "G-XJ7TBXB6LX"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 </html>
