@@ -5,11 +5,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(bodyParser.json());
-
-let deviceData = {
-    rfid: '',
-    lcdMessage: ''
-};
+let deviceData = { rfid: '', lcdMessage: '' };
 
 app.post('/api/device-data', (req, res) => {
     deviceData.rfid = req.body.rfid;
