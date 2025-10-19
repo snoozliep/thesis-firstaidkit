@@ -1,71 +1,72 @@
-// Import Firebase SDK
+// Import Firebase SDK (ensure this matches your HTML imports)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
-// Firebase config
+// Firebase config (replace with your project's config from Firebase Console)
 const firebaseConfig = {
-    apiKey: "AIzaSyDNneb6zniUzuIfrQYBrTWW2ZrZ7cetyyQ",
-    authDomain: "final-pill.firebaseapp.com",
-    databaseURL: "https://final-pill-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "final-pill",
-    storageBucket: "final-pill.firebasestorage.app",
-    messagingSenderId: "108593818831",
-    appId: "1:108593818831:web:bd0af02600ab7a6b8d1bba",
-    measurementId: "G-XJ7TBXB6LX"
+  apiKey: "AIzaSyDNneb6zniUzuIfrQYBrTWW2ZrZ7cetyyQ",
+  authDomain: "final-pill.firebaseapp.com",
+  databaseURL: "https://final-pill-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "final-pill",
+  storageBucket: "final-pill.firebasestorage.app",
+  messagingSenderId: "108593818831",
+  appId: "1:108593818831:web:bd0af02600ab7a6b8d1bba",
+  measurementId: "G-XJ7TBXB6LX"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-// Real-time listeners for readings (if needed)
-const databaseFloatRef = ref(database, 'test/float');
-const databaseIntRef = ref(database, 'test/int');
-const databaseStringRef = ref(database, 'test/string');
+// References to database paths
+const deviceDataRef = ref(database, '/deviceData');
+const logsRef = ref(database, '/logs');
 
-onValue(databaseFloatRef, (snapshot) => {
-    const val = snapshot.val();
-    console.log("Float: " + val);
-    // Update UI if needed
+// Function to update device data (RFID, LCD, status)
+onValue(deviceDataRef, (snapshot) => {
+  const data = snapshot.val();
+  if (data) {
+    document.getElementById('last-rfid').textContent = data.rfid || 'No data';
+    document.getElementById('lcd-message').textContent = data.lcdMessage || 'No data';
+    document.getElementById('user-id').textContent = data.rfid || '— unknown —';
+    document.getElementById('device-status-display').textContent = 'connected';
+    document.getElementById('device-status').textContent = 'Connected';  // Update header status
+  } else {
+    document.getElementById('last-rfid').textContent = 'No data';
+    document.getElementById('lcd-message').textContent = 'No data';
+    document.getElementById('user-id').textContent = '— unknown —';
+    document.getElementById('device-status-display').textContent = 'disconnected';
+    document.getElementById('device-status').textContent = 'Disconnected';
+  }
 });
 
-onValue(databaseIntRef, (snapshot) => {
-    const val = snapshot.val();
-    console.log("Int: " + val);
+// Function to update dispense logs table
+onValue(logsRef, (snapshot) => {
+  const logs = snapshot.val();
+  const tableBody = document.getElementById('log-table-body');
+  tableBody.innerHTML = '';  // Clear existing rows
+
+  if (logs) {
+    Object.values(logs).forEach((log) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${log.user || 'N/A'}</td>
+        <td>${log.pillType || 'N/A'}</td>
+        <td class="text-center">${log.quantity || 1}</td>
+        <td>${log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}</td>
+        <td class="text-right">
+          <span class="${log.status === 'Success' ? 'text-green' : 'text-red'}">${log.status || 'N/A'}</span>
+        </td>
+      `;
+      tableBody.appendChild(row);
+    });
+  } else {
+    tableBody.innerHTML = '<tr class="empty"><td colspan="5">No dispense logs yet.</td></tr>';
+  }
 });
 
-onValue(databaseStringRef, (snapshot) => {
-    const val = snapshot.val();
-    console.log("String: " + val);
+// Optional: Initial fetch on page load
+window.addEventListener('load', () => {
+  // Trigger initial updates if needed
+  console.log('Firebase connected. Listening for updates...');
 });
-
-// Function to fetch device data
-async function fetchDeviceData() {
-    try {
-        const dbRef = ref(database, '/deviceData');
-        const snapshot = await get(dbRef);
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            let parsedData;
-            try {
-                parsedData = JSON.parse(data);
-            } catch {
-                parsedData = { rfid: data, lcdMessage: '' };
-            }
-            document.getElementById('last-rfid').innerText = parsedData.rfid || 'No data';
-            document.getElementById('lcd-message').innerText = parsedData.lcdMessage || 'No data';
-            document.getElementById('user-id').textContent = parsedData.rfid || '— unknown —';
-            document.getElementById('device-status-display').textContent = 'connected';
-            console.log("Data updated:", parsedData);
-        } else {
-            document.getElementById('device-status-display').textContent = 'disconnected';
-        }
-    } catch (error) {
-        console.error('Error fetching data:', error);
-        document.getElementById('device-status-display').textContent = 'error';
-    }
-}
-
-// Fetch on load and poll every 5 seconds
-fetchDeviceData();
-setInterval(fetchDeviceData, 5000);
