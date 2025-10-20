@@ -1,8 +1,8 @@
-// Import Firebase SDK (ensure this matches your HTML imports)
+// Import Firebase SDK
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
-// Firebase config (from your ESP32 code)
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyDNneb6zniUzuIfrQYBrTWW2ZrZ7cetyyQ",
   authDomain: "final-pill.firebaseapp.com",
@@ -18,20 +18,20 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-// References to database paths
-const deviceDataRef = ref(database, '/deviceData');  // ESP32 sends here
-const logsRef = ref(database, '/logs');  // For dispense logs (if ESP32 sends)
+// References
+const deviceDataRef = ref(database, '/deviceData');
+const logsRef = ref(database, '/logs');
 
-// Function to update device data (from ESP32)
+// Update device data
 onValue(deviceDataRef, (snapshot) => {
   const data = snapshot.val();
-  console.log('Received data from ESP32:', data);  // Debug: Check console for received data
+  console.log('Snapshot exists:', snapshot.exists(), 'Data:', data);
   if (data) {
     document.getElementById('last-rfid').textContent = data.rfid || 'No RFID';
     document.getElementById('user-id').textContent = data.rfid || '— unknown —';
     document.getElementById('device-status-display').textContent = 'connected';
     document.getElementById('device-status').textContent = 'Connected';
-    document.getElementById('lcd-message').textContent = 'RFID Scanned';  // Placeholder; ESP32 doesn't send this yet
+    document.getElementById('lcd-message').textContent = 'RFID Scanned';
   } else {
     document.getElementById('last-rfid').textContent = 'No data';
     document.getElementById('user-id').textContent = '— unknown —';
@@ -41,12 +41,11 @@ onValue(deviceDataRef, (snapshot) => {
   }
 });
 
-// Function to update dispense logs table (if ESP32 sends to /logs)
+// Update logs
 onValue(logsRef, (snapshot) => {
   const logs = snapshot.val();
   const tableBody = document.getElementById('log-table-body');
-  tableBody.innerHTML = '';  // Clear existing rows
-
+  tableBody.innerHTML = '';
   if (logs) {
     Object.values(logs).forEach((log) => {
       const row = document.createElement('tr');
