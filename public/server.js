@@ -33,8 +33,6 @@ app.post('/api/device-data', async (req, res) => {
     }
     deviceData = { deviceId, rfid, lcdMessage };
     console.log('Data received from ESP32:', deviceData);
-    res.status(200).json({ message: 'Data saved successfully' });
-
 
     // Write to Firebase Realtime Database
     try {
