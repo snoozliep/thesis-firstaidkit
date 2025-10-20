@@ -80,27 +80,3 @@ onValue(deviceDataRef, (snapshot) => {
     console.log('No data in /deviceData');
   }
 });
-
-// Function to fetch data from the server
-function fetchData() {
-    fetch('https://studio--studio-5091213743-43b4f.us-central1.hosted.app/api/device-data')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('last-rfid').textContent = data.rfid || 'No data';
-            document.getElementById('lcd-message').textContent = data.lcdMessage || 'No data';
-            document.getElementById('user-id').textContent = data.rfid || '— unknown —';
-            document.getElementById('device-status-display').textContent = data.rfid ? 'connected' : 'disconnected';
-            document.getElementById('device-status').textContent = data.rfid ? 'Connected' : 'Disconnected';
-            document.getElementById('servo-status').textContent = 'Idle';  // Placeholder
-            document.getElementById('motor-status').textContent = 'Idle';  // Placeholder
-            console.log('Data updated:', data);
-        })
-        .catch(error => {
-            console.error('Error fetching data:', error);
-            document.getElementById('device-status-display').textContent = 'error';
-        });
-}
-// Fetch on load and poll every 5 seconds
-fetchData();
-setInterval(fetchData, 5000);
-
