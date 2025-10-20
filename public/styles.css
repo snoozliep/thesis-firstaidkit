@@ -15,7 +15,7 @@ html,body{height:100%}
 body{
   margin:0;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  background:linear-gradient(180deg,var(--bg),#eef2ff);
+  background:linear-gradient(180deg,var(--bg),#f6f8ffaa);
   color:var(--text);
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
@@ -25,27 +25,28 @@ body{
   width:100%;
   max-width:1100px;
   margin:0 auto;
-  padding:28px;
+  padding:1px;
 }
 
 .site-header{
   padding:28px 0 4px;
 }
 .title{
+  padding-top: 80px;
   margin:0;
   font-family: 'Poppins', 'Inter', sans-serif;
   font-weight:600;
-  font-size:1.6rem;
+  font-size:2.0rem;
   color:var(--accent);
 }
 .subtitle{
-  margin:6px 0 0;
+  margin:26px 0 0;
   color:var(--muted);
   font-size:0.95rem;
 }
 
 .page main.container{
-  margin-top:18px;
+  margin-top:8px;
 }
 
 .status-grid{
@@ -53,11 +54,12 @@ body{
   grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
   gap:18px;
   margin-bottom:18px;
+  margin-top: ;
 }
 
 .card{
   background:var(--card);
-  padding:16px;
+  padding:26px;
   border-radius:var(--radius);
   box-shadow:0 6px 18px rgba(12,16,30,0.06);
   border:1px solid rgba(12,16,30,0.03);
@@ -66,6 +68,47 @@ body{
 .card h2{
   margin:0 0 8px 0;
   font-size:1.05rem;
+}
+
+/* Icons to the left of card headers (simple emoji-based icons for portability) */
+.card h2 {
+  position: relative;
+  padding-left: 52px; /* room for the icon */
+  display: block;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* base icon style */
+.card h2::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 100px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.962);
+  color: var(--accent);
+  border: 1px solid rgba(81, 85, 93, 0.236);
+}
+
+/* per-card icons (change emojis if you prefer SVGs) */
+.user-card h2::before      { content: "👤"; }
+.device-card h2::before    { content: "📡"; }
+.actuator-card h2::before  { content: "⚙️"; }
+.log-card h2::before       { content: "🕒"; }
+.login-card h2::before     { content: "🔒"; }
+
+/* smaller screens: reduce icon size and padding */
+@media (max-width:520px){
+  .card h2{ padding-left:44px; }
+  .card h2::before{ width:34px; height:34px; font-size:16px; border-radius:8px; }
 }
 
 .muted{color:var(--muted);font-size:0.95rem;margin-bottom:8px}
@@ -135,4 +178,90 @@ a:focus,a:active,button:focus{outline:3px solid rgba(11,92,255,0.16);outline-off
   body{background:white}
   .site-header,.site-footer{display:none}
   .container{padding:0}
+}
+
+/* Sleek dispense log styles (no search / no rows selector / no pagination) */
+.log-card .log-controls { display: none; }
+
+.log-card .table-wrap {
+  overflow: auto;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+
+/* Sleek table: minimal, airy, thin dividers */
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+  min-width: 640px;
+  font-size: 0.95rem;
+}
+
+.log-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.80rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(11,92,255,0.04);
+}
+
+.log-table th, .log-table td {
+  padding: 10px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(11,92,255,0.04);
+  color: var(--text);
+}
+
+/* Subtle zebra and hover */
+.log-table tbody tr:nth-child(even) { background: rgba(11,92,255,0.02); }
+.log-table tbody tr:hover { background: rgba(11,92,255,0.035); }
+
+/* Status chip small and flat */
+.log-status {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #fff;
+  min-width: 72px;
+  text-align: center;
+}
+.log-status.ok { background: linear-gradient(90deg,#16a34a,#10b159); }
+.log-status.fail { background: linear-gradient(90deg,var(--danger),#ff6b6b); }
+.log-status.pending { background: linear-gradient(90deg,#f59e0b,#f97316); }
+
+/* Responsive: stack details without extra controls */
+@media (max-width:760px) {
+  .log-table { min-width: 0; }
+  .log-table thead { display: none; }
+  .log-table tbody tr {
+    display: block;
+    margin-bottom: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(11,92,255,0.04);
+    background: var(--card);
+  }
+  .log-table td {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-bottom: none;
+  }
+  .log-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-weight: 600;
+    margin-right: 12px;
+    min-width: 110px;
+  }
 }

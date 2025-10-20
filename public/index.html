@@ -1,25 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Automated Dispenser Interface</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FirstAidKit Interface</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#0b5cff">
+    <link rel="icon" type="image/png" href="https://www.pngmart.com/files/23/Pochita-PNG.png">
     <link rel="stylesheet" href="./styles.css">
-    <!-- Removed inline Firebase imports (handled in script.js) -->
+    <!-- Firebase SDK -->
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+    import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+    </script>
 </head>
 <body>
     <div class="page">
         <header class="site-header">
             <div class="container">
-                <h1 class="title">Automated Dispenser</h1>
+                <h1 class="title"><a href="https://snoozliep.github.io/thesis/thesis.html">FirstAid Dispenser</a></h1>
                 <p class="subtitle">Monitoring and control interface</p>
-                <p>Last Scanned RFID: <span id="last-rfid" aria-live="polite">Loading...</span></p>
-                <p>LCD Message: <span id="lcd-message" aria-live="polite">Loading...</span></p>
-                <p>Device Status: <span id="device-status" aria-live="polite">Loading...</span></p>
+                <!-- <p>LCD Message: <span id="lcd-message">Loading...</span></p> -->
             </div>
         </header>
 
@@ -29,17 +32,22 @@
                     <h2>Current User</h2>
                     <p class="muted">Identified by last RFID scan</p>
                     <div class="user-id" id="user-id">— unknown —</div>
+
+                    <!-- optional existing name/edit UI (keeps compatibility) -->
+                    <div class="user-name" id="user-name" style="margin-top:10px;">
+                        <strong>Name:</strong> <span id="user-name-value">— none —</span>
+                    </div>
                 </article>
 
                 <article class="card device-card">
                     <h2>Device Status</h2>
                     <p class="muted">Real-time hardware connection</p>
-                    <div class="badge disconnected" id="device-status-display">disconnected</div>
+                    <div class="badge" id="device-status-display">disconnected</div>
                 </article>
 
                 <article class="card actuator-card">
                     <h2>Actuators</h2>
-                    <p class="muted">Servo & motor statuses</p>
+                    <p class="muted">Servo Statuses</p>
                     <ul class="inline-list">
                         <li>Servo: <span class="small-muted" id="servo-status">unknown</span></li>
                         <li>Motor: <span class="small-muted" id="motor-status">unknown</span></li>
@@ -71,18 +79,6 @@
             </section>
         </main>
     </div>
-
-    <!-- Floating login card (CSS pins to lower-right) -->
-    <section class="card login-card" aria-label="Login panel">
-        <h2>Login</h2>
-        <form id="loginForm" novalidate>
-            <input type="email" id="email" placeholder="Email" required autocomplete="username">
-            <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
-            <button type="submit">Login</button>
-        </form>
-        <div id="loginMessage" role="status" aria-live="polite"></div>
-    </section>
-
     <script type="module" src="./script.js"></script>
 </body>
 </html>
