@@ -1,19 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Automated Dispenser Interface</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#0b5cff">
     <link rel="stylesheet" href="./styles.css">
-    <!-- Firebase SDK -->
-    <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-    import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
-    </script>
+    <!-- Removed inline Firebase imports (handled in script.js) -->
 </head>
 <body>
     <div class="page">
@@ -21,9 +17,9 @@
             <div class="container">
                 <h1 class="title">Automated Dispenser</h1>
                 <p class="subtitle">Monitoring and control interface</p>
-                <p>Last Scanned RFID: <span id="last-rfid">Loading...</span></p>
-                <p>LCD Message: <span id="lcd-message">Loading...</span></p>
-                <p>Device Status: <span id="device-status">Loading...</span></p>
+                <p>Last Scanned RFID: <span id="last-rfid" aria-live="polite">Loading...</span></p>
+                <p>LCD Message: <span id="lcd-message" aria-live="polite">Loading...</span></p>
+                <p>Device Status: <span id="device-status" aria-live="polite">Loading...</span></p>
             </div>
         </header>
 
@@ -38,7 +34,7 @@
                 <article class="card device-card">
                     <h2>Device Status</h2>
                     <p class="muted">Real-time hardware connection</p>
-                    <div class="badge" id="device-status-display">disconnected</div>
+                    <div class="badge disconnected" id="device-status-display">disconnected</div>
                 </article>
 
                 <article class="card actuator-card">
@@ -75,6 +71,18 @@
             </section>
         </main>
     </div>
+
+    <!-- Floating login card (CSS pins to lower-right) -->
+    <section class="card login-card" aria-label="Login panel">
+        <h2>Login</h2>
+        <form id="loginForm" novalidate>
+            <input type="email" id="email" placeholder="Email" required autocomplete="username">
+            <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
+            <button type="submit">Login</button>
+        </form>
+        <div id="loginMessage" role="status" aria-live="polite"></div>
+    </section>
+
     <script type="module" src="./script.js"></script>
 </body>
 </html>

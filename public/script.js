@@ -1,8 +1,8 @@
-// Import Firebase SDK
+// Firebase web client (modular) to mirror ESP32 /deviceData -> UI
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
-// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyDNneb6zniUzuIfrQYBrTWW2ZrZ7cetyyQ",
   authDomain: "final-pill.firebaseapp.com",
@@ -14,58 +14,91 @@ const firebaseConfig = {
   measurementId: "G-XJ7TBXB6LX"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
+const db = getDatabase(app);
 
-// References
-const deviceDataRef = ref(database, '/deviceData');
-const logsRef = ref(database, '/logs');
+// Refs
+const deviceDataRef = ref(db, '/deviceData');
+const logsRef = ref(db, '/logs');
 
-// Update device data
-onValue(deviceDataRef, (snapshot) => {
-  const data = snapshot.val();
-  console.log('Snapshot exists:', snapshot.exists(), 'Data:', data);
-  if (data) {
-    document.getElementById('last-rfid').textContent = data.rfid || 'No RFID';
-    document.getElementById('user-id').textContent = data.rfid || '— unknown —';
-    document.getElementById('device-status-display').textContent = 'connected';
-    document.getElementById('device-status').textContent = 'Connected';
-    document.getElementById('lcd-message').textContent = 'RFID Scanned';
-  } else {
-    document.getElementById('last-rfid').textContent = 'No data';
-    document.getElementById('user-id').textContent = '— unknown —';
-    document.getElementById('device-status-display').textContent = 'disconnected';
-    document.getElementById('device-status').textContent = 'Disconnected';
-    document.getElementById('lcd-message').textContent = 'No data';
+// Helper: safe DOM getter
+const $ = id => document.getElementById(id);
+
+// Helper: normalize timestamp (seconds or ms) -> human string
+function formatTimestamp(ts) {
+  if (!ts) return 'N/A';
+  // if ts looks like seconds (10 digits) convert to ms
+  if (ts < 1e12) ts = ts * 1000;
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return String(ts);
+  }
+}
+
+// Update UI from deviceData snapshot
+onValue(deviceDataRef, (snap) => {
+  const data = snap.val();
+  console.debug('deviceData:', data);
+
+  const lastRfidEl = $('last-rfid');
+  const userIdEl = $('user-id');
+  const lcdEl = $('lcd-message');
+  const headerStatusEl = $('device-status');
+  const badgeEl = $('device-status-display');
+
+  const rfid = data?.rfid ?? '— unknown —';
+  const lcdMessage = data?.lcd || data?.lcdMessage || data?.message || '';
+  const connected = !!data; // presence of data = connected
+
+  if (lastRfidEl) lastRfidEl.textContent = rfid;
+  if (userIdEl) userIdEl.textContent = rfid;
+  if (lcdEl) lcdEl.textContent = lcdMessage || (connected ? 'ready' : 'No data');
+  if (headerStatusEl) headerStatusEl.textContent = connected ? 'Connected' : 'Disconnected';
+
+  if (badgeEl) {
+    badgeEl.textContent = lcdMessage || (connected ? 'connected' : 'disconnected');
+    badgeEl.classList.toggle('connected', connected);
+    badgeEl.classList.toggle('disconnected', !connected);
   }
 });
 
-// Update logs
-onValue(logsRef, (snapshot) => {
-  const logs = snapshot.val();
-  const tableBody = document.getElementById('log-table-body');
-  tableBody.innerHTML = '';
-  if (logs) {
-    Object.values(logs).forEach((log) => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${log.user || 'N/A'}</td>
-        <td>${log.pillType || 'N/A'}</td>
-        <td class="text-center">${log.quantity || 1}</td>
-        <td>${log.timestamp ? new Date(log.timestamp * 1000).toLocaleString() : 'N/A'}</td>
-        <td class="text-right">
-          <span class="${log.status === 'Success' ? 'text-green' : 'text-red'}">${log.status || 'N/A'}</span>
-        </td>
-      `;
-      tableBody.appendChild(row);
-    });
-  } else {
-    tableBody.innerHTML = '<tr class="empty"><td colspan="5">No dispense logs yet.</td></tr>';
+// Update dispense logs table
+onValue(logsRef, (snap) => {
+  const logs = snap.val();
+  const tbody = $('log-table-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+
+  if (!logs) {
+    tbody.innerHTML = '<tr class="empty"><td colspan="5">No dispense logs yet.</td></tr>';
+    return;
   }
+
+  // logs may be keyed by push id
+  const rows = Object.values(logs);
+  rows.forEach((log) => {
+    const tr = document.createElement('tr');
+
+    const user = log.user || log.rfid || 'N/A';
+    const pillType = log.pillType || log.pill || 'N/A';
+    const qty = log.quantity ?? log.qty ?? 1;
+    const ts = log.timestamp ?? log.time ?? null;
+    const status = log.status || log.result || 'N/A';
+
+    tr.innerHTML = `
+      <td>${user}</td>
+      <td>${pillType}</td>
+      <td>${qty}</td>
+      <td>${formatTimestamp(ts)}</td>
+      <td>${status}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 });
 
-// Initial load
+// initial log message
 window.addEventListener('load', () => {
-  console.log('Firebase connected. Listening for ESP32 data...');
+  console.log('Script loaded — listening for device updates.');
 });
