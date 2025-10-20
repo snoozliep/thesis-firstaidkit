@@ -70,13 +70,3 @@ onValue(logsRef, (snapshot) => {
 window.addEventListener('load', () => {
   console.log('Firebase connected. Listening for ESP32 data...');
 });
-
-onValue(deviceDataRef, (snapshot) => {
-  const data = snapshot.val();
-  console.log('Snapshot received:', snapshot.exists(), data);  // Check if data exists
-  if (data) {
-    // ... your update code
-  } else {
-    console.log('No data in /deviceData');
-  }
-});
