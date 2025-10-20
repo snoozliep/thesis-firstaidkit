@@ -15,16 +15,32 @@
     import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
     </script>
 </head>
+<body>
+    <div class="page">
+        <header class="site-header">
+            <div class="container">
+                <h1 class="title">Automated Dispenser</h1>
+                <p class="subtitle">Monitoring and control interface</p>
+                <p>Last Scanned RFID: <span id="last-rfid">Loading...</span></p>
+                <p>LCD Message: <span id="lcd-message">Loading...</span></p>
+                <p>Device Status: <span id="device-status">Loading...</span></p>
+            </div>
+        </header>
+
+        <main class="container">
+            <section class="grid status-grid">
                 <article class="card user-card">
                     <h2>Current User</h2>
                     <p class="muted">Identified by last RFID scan</p>
                     <div class="user-id" id="user-id">— unknown —</div>
                 </article>
+
                 <article class="card device-card">
                     <h2>Device Status</h2>
                     <p class="muted">Real-time hardware connection</p>
                     <div class="badge" id="device-status-display">disconnected</div>
                 </article>
+
                 <article class="card actuator-card">
                     <h2>Actuators</h2>
                     <p class="muted">Servo & motor statuses</p>
@@ -34,6 +50,7 @@
                     </ul>
                 </article>
             </section>
+
             <section class="card log-card">
                 <h2>Dispense Log</h2>
                 <p class="muted">Recent pill dispensing events</p>
@@ -58,6 +75,6 @@
             </section>
         </main>
     </div>
-    <script src="./script.js"></script>
+    <script type="module" src="./script.js"></script>
 </body>
 </html>
