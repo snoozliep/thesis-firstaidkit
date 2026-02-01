@@ -150,28 +150,28 @@ document.addEventListener('DOMContentLoaded', () => {
     logTbody.innerHTML = rows.length === 0 
       ? '<tr class="empty"><td colspan="7">No dispense logs yet.</td></tr>'
       : rows.map(row => {
-          const user = escapeHtml(row.user || '');
-          const pillType = escapeHtml(row.pillType || '');
-          const qty = escapeHtml(row.quantity ?? row.qty ?? 1);
-          const ts = escapeHtml(formatTimestamp(row.timestamp ?? row.time ?? 0));
-          const error = escapeHtml(row.pillType || 'N/A');
-          const status = escapeHtml(row.status || row.result || 'N/A');
-          const statusClass = status.toLowerCase().includes('fail') ? 'fail' : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
-          const pin = escapeHtml(row.pin || '');
+        const user = escapeHtml(row.user || '');
+        const pillType = escapeHtml(row.pillName || row.pillType || '');  // Pill name for Pill Type
+        const qty = escapeHtml(row.quantity ?? row.qty ?? 1);
+        const ts = escapeHtml(formatTimestamp(row.timestamp ?? row.time ?? 0));
+        const error = escapeHtml(row.status === 'failed' ? row.pillType : 'N/A');  // Reason for Error on failed
+        const status = escapeHtml(row.status || row.result || 'N/A');
+        const statusClass = status.toLowerCase().includes('fail') ? 'fail' : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
+        const pin = escapeHtml(row.pin || '');
 
-          return `
-            <tr data-id="${escapeHtml(row.id)}">
-              <td data-label="User">${user}</td>
-              <td data-label="Pill Type">${pillType}</td>
-              <td data-label="Quantity">${qty}</td>
-              <td data-label="Timestamp">${ts}</td>
-              <td data-label="Error">${error}</td>
-              <td data-label="Status"><span class="log-status ${statusClass}">${status}</span></td>
-              <td data-label="PIN">${pin}</td>
-            </tr>
-          `;
-        }).join('');
-  });
+  return `
+    <tr data-id="${escapeHtml(row.id)}">
+      <td data-label="User">${user}</td>
+      <td data-label="Pill Type">${pillType}</td>
+      <td data-label="Quantity">${qty}</td>
+      <td data-label="Timestamp">${ts}</td>
+      <td data-label="Error">${error}</td>
+      <td data-label="Status"><span class="log-status ${statusClass}">${status}</span></td>
+      <td data-label="PIN">${pin}</td>
+    </tr>
+  `;
+}).join('');
+
 
   // --- RFID Tag Management ---
   if (addTagForm) {
@@ -269,28 +269,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Listen for New Alerts with HMAC Verification (Only Recent Ones) ---
   onChildAdded(alertsRef, async (snapshot) => {
-    const alert = snapshot.val();
-    if (alert && alert.status === "active") {
-      // Only show modal if alert is recent (within last 10 seconds)
-      const now = Date.now() / 1000;  // Current time in seconds
-      if (alert.timestamp > (now - 10)) {  // Adjust threshold as needed (e.g., 10 seconds)
-        // Reconstruct the payload exactly as in ESP32: "Button Pressed." + timestamp + "active"
-        const payload = "Button Pressed." + alert.timestamp + "active";
-        
-        // Compute expected HMAC
-        const expectedHash = await computeHMAC(payload, secretKey);
-        
-        // Verify hash
-        if (alert.hash === expectedHash) {
-          // Hash matches: Proceed with alert
-          showAlertModal(alert.message, alert.timestamp);
-        } else {
-          // Hash mismatch: Log error and ignore (potential tampering)
-          console.error("Alert hash verification failed! Received hash:", alert.hash, "Expected:", expectedHash);
-        }
+  console.log('New alert received:', snapshot.val());  // Debug log
+  const alert = snapshot.val();
+  if (alert && alert.status === "active") {
+    const now = Date.now() / 1000;
+    if (alert.timestamp > (now - 60)) {  // Increased to 60 seconds for delay tolerance
+      const payload = "Button Pressed." + alert.timestamp + "active";
+      const expectedHash = await computeHMAC(payload, secretKey);
+      if (alert.hash === expectedHash) {
+        console.log('Hash verified, showing modal');  // Debug log
+        showAlertModal(alert.message, alert.timestamp);
+      } else {
+        console.error("Alert hash verification failed! Received:", alert.hash, "Expected:", expectedHash);
       }
+    } else {
+      console.log('Alert too old, ignored:', alert.timestamp);
     }
-  });
+  }
+}, (error) => {
+  console.error('Firebase alerts error:', error);
+});
 
   // --- Request Notification Permission ---
   if ("Notification" in window && Notification.permission !== "granted") {
