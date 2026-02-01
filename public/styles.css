@@ -2,6 +2,7 @@
 :root{
   --bg: #f6f8ff;
   --card: #ffffff;
+  --inline-list: #0f1724;
   --text: #0f1724;
   --muted: #6b7280;
   --accent: #0b5cff;
@@ -23,16 +24,16 @@ body{
 
 .container{
   width:100%;
-  max-width:1100px;
+  max-width:1000px;
   margin:0 auto;
   padding:1px;
 }
 
 .site-header{
-  padding:28px 0 4px;
+  padding:1px 0 2px;
 }
 .title{
-  padding-top: 80px;
+  padding-top: 30px;
   margin:0;
   font-family: 'Poppins', 'Inter', sans-serif;
   font-weight:600;
@@ -52,17 +53,25 @@ body{
 .status-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:18px;
-  margin-bottom:18px;
+  gap:10px !important;
+  margin-bottom:10px;
   margin-top: ;
 }
 
 .card{
   background:var(--card);
-  padding:26px;
+  padding:23px 26px 21px 26px;
   border-radius:var(--radius);
   box-shadow:0 6px 18px rgba(12,16,30,0.06);
   border:1px solid rgba(12,16,30,0.03);
+}
+
+/* If you want to keep top/side paddings as before, you can use: */
+.card {
+  padding-top: 23px;
+  padding-left: 26px;
+  padding-right: 26px;
+  padding-bottom: 21px !important;
 }
 
 .card h2{
@@ -83,7 +92,7 @@ body{
 .card h2::before{
   content: "";
   position: absolute;
-  left: 0;
+  left: -10px;
   top: 50%;
   transform: translateY(-50%);
   width: 40px;
@@ -93,12 +102,12 @@ body{
   place-items: center;
   font-size: 18px;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.962);
+  background: rgba(255, 255, 255, 0)61);
   color: var(--accent);
-  border: 1px solid rgba(81, 85, 93, 0.236);
 }
 
 /* per-card icons (change emojis if you prefer SVGs) */
+.add-tag-card h2::before   { content: "➕"; }
 .user-card h2::before      { content: "👤"; }
 .device-card h2::before    { content: "📡"; }
 .actuator-card h2::before  { content: "⚙️"; }
@@ -120,8 +129,9 @@ body{
   border-radius:999px;
   font-weight:600;
   text-transform:lowercase;
+  
 }
-.badge.disconnected{background:rgba(239,68,68,0.08);color:var(--danger);border:1px solid rgba(239,68,68,0.12)}
+.badge.disconnected{background:rgba(255, 80, 80, 0.067);color:var(--danger);border:1px solid rgba(220, 0, 0, 0.44)}
 .badge.connected{background:var(--glass);color:var(--accent);border:1px solid rgba(11,92,255,0.12)}
 
 .inline-list{list-style:none;padding:0;margin:0;display:flex;gap:12px;flex-wrap:wrap}
@@ -264,4 +274,282 @@ a:focus,a:active,button:focus{outline:3px solid rgba(11,92,255,0.16);outline-off
     margin-right: 12px;
     min-width: 110px;
   }
+}
+
+/* Add-tag (RFID) card styles — fix layout/visibility of the Tag ID / Name inputs */
+/* .add-tag-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid rgba(11,92,255,0.04);
+} */
+
+.add-tag-card label {
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.add-tag-card input[type="text"], .add-tag-card input[type="password"] {
+  padding: 2px 1px;
+  border-radius: 5px;
+  margin: 2px;
+  border: 1px solid rgba(11,92,255,0.08);
+  background: rgba(11,92,255,0.03);
+  color: var(--text);
+  font-size: 0.95rem;
+  width: 50%;
+}
+
+.add-tag-card button {
+  margin-top: 10px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+/* Make displayed RFID/user-id clearer (monospace + subtle surface) */
+.user-id {
+  font-family: "Roboto Mono", "SFMono-Regular", Menlo, Monaco, monospace;
+  background: rgba(11,92,255,0.03);
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(11,92,255,0.04);
+  display: inline-block;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Add space below the actuator card so layout doesn't feel cramped */
+.actuator-card {
+  margin-bottom: 10px;
+}
+
+/* Place user-id and device status badge at bottom-left of their cards */
+.user-card,
+.device-card {
+  position: relative; /* allow absolutely positioned children */
+  padding-bottom: 64px; /* make room for the bottom-left items */
+}
+
+/* user id anchored bottom-left inside user card */
+.user-card .user-id {
+  position: absolute;
+  left: 18px;
+  bottom: 14px;
+  z-index: 5;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(11,92,255,0.03);
+  border: 1px solid rgba(11,92,255,0.04);
+  display: inline-block;
+  font-weight: 700;
+  font-family: "Roboto Mono", monospace;
+}
+
+/* device status badge anchored bottom-left inside device card */
+.device-card .badge {
+  position: absolute;
+  left: 18px;
+  bottom: 14px;
+  z-index: 5;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: lowercase;
+  box-shadow: 0 6px 14px rgba(12,16,30,0.04);
+}
+
+/* ensure overlap doesn't hide other card content on small screens */
+@media (max-width:520px) {
+  .user-card, .device-card { padding-bottom: 84px; }
+  .user-card .user-id, .device-card .badge {
+    left: 14px;
+    bottom: 12px;
+    padding: 7px 10px;
+    font-size: 0.95rem;
+  }
+}
+
+/* Reduce gap between cards in the grid and between tag rows */
+
+/* Main grid: smaller gap between cards */
+.status-grid {
+  gap: 10px !important;
+}
+
+/* Tag list card: reduce margin above */
+.tag-list-card {
+  margin-top: 10px !important;
+}
+
+/* Tag rows: reduce vertical spacing */
+.tag-row {
+  margin-bottom: 4px;
+  padding: 4px 0;
+}
+
+/* Between device-card and tag-list-card on right: reduce vertical gap */
+@media (min-width: 900px) {
+  .status-grid {
+    gap: 10px !important;
+  }
+  .device-card,
+  .tag-list-card {
+    min-width: 260px;
+    max-width: 340px;
+  }
+  .tag-list-card {
+    margin-top: 8px !important;
+  }
+}
+
+/* Login popup styles */
+.login-popup {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(12,16,30,0.18);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.login-form {
+  background: linear-gradient(135deg, #f6f8ff 60%, #e0e7ff 100%);
+  padding: 38px 32px 32px 32px;
+  border-radius: 22px;
+  box-shadow: 0 12px 36px rgba(12,16,30,0.16);
+  min-width: 320px;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: 2px solid #e0e7ff;
+  position: relative;
+}
+
+.login-form h2 {
+  margin-bottom: 8px;
+  font-size: 1.35rem;
+  text-align: center;
+  color: var(--accent);
+  font-family: 'Poppins', 'Inter', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+.login-form label {
+  font-weight: 500;
+  margin-bottom: 2px;
+  color: var(--muted);
+}
+
+.login-form input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid #b6c3ff;
+  font-size: 1rem;
+  background: #f6f8ff;
+  transition: border 0.2s;
+}
+.login-form input:focus {
+  border-color: var(--accent);
+  outline: none;
+  background: #e0e7ff;
+}
+
+.login-form button {
+  margin-top: 12px;
+  padding: 12px 0;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--accent), #2b7bff);
+  color: #fff;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  font-size: 1.08rem;
+  box-shadow: 0 2px 8px rgba(11,92,255,0.08);
+  transition: background 0.2s;
+}
+.login-form button:hover {
+  background: linear-gradient(90deg, #2b7bff, var(--accent));
+}
+
+.login-error {
+  font-size: 0.98rem;
+  min-height: 18px;
+  text-align: center;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+/* Cute lock emoji on top */
+.login-form::before {
+  content: "🔒";
+  position: absolute;
+  top: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 2.4rem;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(11,92,255,0.08);
+  padding: 8px;
+  border: 2px solid #e0e7ff;
+}
+
+/* Responsive: shrink on small screens */
+@media (max-width:520px) {
+  .login-form {
+    min-width: 90vw;
+    max-width: 98vw;
+    padding: 24px 8vw 18px 8vw;
+    border-radius: 16px;
+  }
+  .login-form::before {
+    top: -24px;
+    font-size: 2rem;
+    padding: 6px;
+  }
+}
+
+/* Modal styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0; top: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.3);
+}
+.modal-content {
+  background: #fff;
+  margin: 10% auto;
+  padding: 24px 32px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  text-align: center;
+}
+.close {
+  position: absolute;
+  right: 24px;
+  top: 18px;
+  font-size: 2rem;
+  cursor: pointer;
 }

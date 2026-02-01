@@ -1,8 +1,10 @@
-// Safe Firebase client + guarded DOM updates
+// --- Firebase Client Setup ---
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 
+// --- Firebase Configuration ---
 const firebaseConfig = {
   apiKey: "AIzaSyDNneb6zniUzuIfrQYBrTWW2ZrZ7cetyyQ",
   authDomain: "final-pill.firebaseapp.com",
@@ -14,330 +16,319 @@ const firebaseConfig = {
   measurementId: "G-XJ7TBXB6LX"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const deviceDataRef = ref(db, '/deviceData');
-const logsRef = ref(db, '/logs');
+//secret key//
+const secretKey = "82cf459c4f576c3a075ab02b2963b240a692dac7";
+//HMAC Comms
+async function computeHMAC(data, key) {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(key);
+  const dataBuffer = encoder.encode(data);
 
-function formatTimestamp(ts) {
-  if (!ts) return 'N/A';
-  if (ts < 1e12) ts = ts * 1000;
-  try { return new Date(ts).toLocaleString(); } catch { return String(ts); }
+  // Import key for HMAC
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  // Compute HMAC
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBuffer);
+  const hashArray = Array.from(new Uint8Array(signature));
+  
+  // Convert to hex string (lowercase to match ESP32 output)
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// --- Initialize Firebase ---
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+// --- Database References ---
+const deviceDataRef = ref(db, '/deviceData');
+const logsRef = ref(db, '/logs');
+const tagsRef = ref(db, '/tags');
+const alertsRef = ref(db, '/alerts');
+
+// --- Utility Functions ---
+const el = id => document.getElementById(id);
+
+function formatTimestamp(ts) {
+  const date = new Date(ts * 1000);
+  return date.toLocaleString();
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, s => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[s]));
+}
+
+// --- DOM Ready Event ---
 document.addEventListener('DOMContentLoaded', () => {
-  const el = id => document.getElementById(id) || null;
-
-  const lastRfidEl = el('last-rfid');
-  const userIdEl = el('user-id');
-  const lcdEl = el('lcd-message');
-  const headerStatusEl = el('device-status');
+  // --- Elements ---
+  const loginCard = el('loginCard');
+  const loginForm = el('loginForm');
+  const loginError = el('loginError');
+  const pageContent = document.querySelector('.page');
+  const userNameValue = el('user-name-value');
+  const lastRfidTimeEl = el('last-rfid-time');
   const badgeEl = el('device-status-display');
+  const userIdEl = el('user-id');
   const logTbody = el('log-table-body');
+  const addTagForm = el('add-tag-form');
+  const tagIdInput = el('tag-id');
+  const tagNameInput = el('tag-name');
+  const tagPinInput = el('tag-pin');
+  const tagListDiv = el('tag-list');
 
-  // deviceData listener (guarded)
+  // --- Authentication Handling ---
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      loginCard.style.display = 'none';
+      pageContent.style.display = '';
+    } else {
+      loginCard.style.display = '';
+      pageContent.style.display = 'none';
+    }
+  });
+
+  // --- Login Form Submission ---
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginError.textContent = '';
+      const email = el('loginEmail').value;
+      const password = el('loginPassword').value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        loginError.textContent = err.message || 'Sign in failed';
+      }
+    });
+  }
+
+  // --- Device Data Listener ---
   onValue(deviceDataRef, (snap) => {
     const data = snap.val() ?? {};
-    // pick name (ESP writes "name"), fallback to userName or rfid
-    const name = data?.name ?? data?.userName ?? '';
+    const name = data?.name ?? '—';
     const rfid = data?.rfid ?? '— unknown —';
-
-    const userIdEl = document.getElementById('user-id');
-    const headerEl = document.getElementById('current-user-header');
-    const userNameValue = document.getElementById('user-name-value');
-
-    if (userIdEl) userIdEl.textContent = name || rfid || '— unknown —';
-    if (headerEl) headerEl.textContent = name || 'Last User';
-    if (userNameValue) userNameValue.textContent = name || '— none —';
-
-    const lcdMessage = data && (data.lcdMessage || data.lcd || data.message) ? (data.lcdMessage || data.lcd || data.message) : '';
-    const rawTs = data && data.timestamp ? data.timestamp : 0;
-    const tsMs = rawTs && rawTs < 1e12 ? rawTs * 1000 : rawTs;
+    const rawTs = Number(data?.timestamp ?? 0);
+    const tsMs = (rawTs > 1e12) ? rawTs : rawTs * 1000; // Convert to milliseconds
     const now = Date.now();
-    const connected = !!data && tsMs && (now - tsMs) < 15000; // 15s freshness
+    const connected = tsMs && (now - tsMs < 30000); // Check if connected within the last 30 seconds
 
-    if (lastRfidEl) lastRfidEl.textContent = rfid;
-    if (userIdEl) userIdEl.textContent = rfid;
-    if (lcdEl) lcdEl.textContent = lcdMessage || (connected ? 'ready' : 'No data');
-    if (headerStatusEl) headerStatusEl.textContent = connected ? 'Connected' : 'Disconnected';
+    userNameValue.textContent = name;
+    lastRfidTimeEl.textContent = tsMs ? new Date(tsMs).toLocaleString() : '—';
+    badgeEl.textContent = connected ? 'connected' : 'disconnected';
+    badgeEl.classList.toggle('connected', connected);
+    badgeEl.classList.toggle('disconnected', !connected);
+    userIdEl.textContent = rfid;
 
-    if (badgeEl) {
-      badgeEl.textContent = connected ? 'connected' : 'disconnected';
-      badgeEl.classList.toggle('connected', connected);
-      badgeEl.classList.toggle('disconnected', !connected);
-    }
-  }, (err) => console.error('deviceData onValue error', err));
+    // --- Update device status card ---
+    el('device-temp').textContent = data.temperature ?? '--';
+    el('device-humidity').textContent = data.humidity ?? '--';
 
-  // logs listener (guarded)
+    // --- Update slot/tube/motor status ---
+    el("slot1-status").textContent = data.slot1 ?? "unknown";
+    el("slot2-status").textContent = data.slot2 ?? "unknown";
+    el("slot3-status").textContent = data.slot3 ?? "unknown";
+    el("slot4-status").textContent = data.slot4 ?? "unknown";
+    el("motor-status").textContent = data.motor ?? "unknown";
+
+    // --- Display last RFID and tag scanned ---
+    if (el('last-rfid')) el('last-rfid').textContent = data.rfid ?? '--';
+    if (el('last-tag')) el('last-tag').textContent = data.name ?? '--';
+
+    // --- Display last temperature and humidity recorded ---
+    if (el('last-temp')) el('last-temp').textContent = data.temperature ?? '--';
+    if (el('last-humidity')) el('last-humidity').textContent = data.humidity ?? '--';
+  });
+
+  // --- Logs Listener ---
   onValue(logsRef, (snap) => {
-    try {
-      const logs = snap.val();
-      if (!logTbody) return;
-      logTbody.innerHTML = '';
+    if (!logTbody) return;
+    const obj = snap.val() || {};
+    const rows = Object.entries(obj).map(([k, v]) => ({ id: k, ...v }));
+    rows.sort((a, b) => (b.timestamp ?? b.time ?? 0) - (a.timestamp ?? a.time ?? 0));
 
-      if (!logs) {
-        logTbody.innerHTML = '<tr class="empty"><td colspan="5">No dispense logs yet.</td></tr>';
+    logTbody.innerHTML = rows.length === 0 
+      ? '<tr class="empty"><td colspan="6">No dispense logs yet.</td></tr>'
+      : rows.map(row => {
+          const user = escapeHtml(row.user || '');
+          const pillType = escapeHtml(row.pillType || '');
+          const qty = escapeHtml(row.quantity ?? row.qty ?? 1);
+          const ts = escapeHtml(formatTimestamp(row.timestamp ?? row.time ?? 0));
+          const error = escapeHtml(row.pillType || 'N/A');
+          const status = escapeHtml(row.status || row.result || 'N/A');
+          const statusClass = status.toLowerCase().includes('fail') ? 'fail' : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
+          const pin = escapeHtml(row.pin || '');
+
+          return `
+            <tr data-id="${escapeHtml(row.id)}">
+              <td data-label="User">${user}</td>
+              <td data-label="Pill Type">${pillType}</td>
+              <td data-label="Quantity">${qty}</td>
+              <td data-label="Timestamp">${ts}</td>
+              <td data-label="Error">${error}</td>
+              <td data-label="Status"><span class="log-status ${statusClass}">${status}</span></td>
+              <td data-label="PIN">${pin}</td>
+            </tr>
+          `;
+        }).join('');
+  });
+
+  // --- REMOVE Slot Status Listener (no longer needed) ---
+  // onValue(slotStatusRef, (snap) => {
+  //   const data = snap.val() || {};
+  //   el("slot1-status").textContent = data.Slot1?.status || "unknown";
+  //   el("slot2-status").textContent = data.Slot2?.status || "unknown";
+  //   el("slot3-status").textContent = data.Slot3?.status || "unknown";
+  //   el("slot4-status").textContent = data.Slot4?.status || "unknown";
+  //   el("motor-status").textContent = data.Motor1?.status || "unknown";
+  // });
+
+  // --- RFID Tag Management ---
+  if (addTagForm) {
+    addTagForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rfid = tagIdInput.value.trim();
+      const name = tagNameInput.value.trim();
+      const pin = tagPinInput.value.trim();
+
+      // Validate PIN is 4 digits
+      if (!/^\d{4}$/.test(pin)) {
+        alert('PIN must be exactly 4 digits.');
         return;
       }
 
-      Object.values(logs).forEach(log => {
-        const tr = document.createElement('tr');
-        const user = log.user || log.rfid || 'N/A';
-        const pillType = log.pillType || log.pill || 'N/A';
-        const qty = (typeof log.quantity !== 'undefined') ? log.quantity : (log.qty ?? 1);
-        const ts = log.timestamp ?? log.time ?? null;
-        const status = log.status || log.result || 'N/A';
+      // Save to Firebase
+      const tagData = { name, pin };
+      await set(ref(db, `/tags/${rfid}`), tagData);
 
-        tr.innerHTML = `
-          <td>${user}</td>
-          <td>${pillType}</td>
-          <td>${qty}</td>
-          <td>${formatTimestamp(ts)}</td>
-          <td>${status}</td>
-        `;
-        logTbody.appendChild(tr);
-      });
-    } catch (e) {
-      console.error('logs handler error', e);
-    }
-  }, (err) => console.error('logs onValue error', err));
-});
-
-/*
-  Enhanced client-side rendering for /logs:
-  - search filter
-  - header sorting (click to sort)
-  - page size + pagination
-  - responsive row labels
-*/
-
-document.addEventListener('DOMContentLoaded', () => {
-  // --- setup controls & state ---
-  const logTbody = document.getElementById('log-table-body');
-  const tableWrap = document.querySelector('.log-card .table-wrap') || document.querySelector('.log-card');
-  if (!tableWrap) return;
-
-  // inject controls container above table
-  const controls = document.createElement('div');
-  controls.className = 'log-controls';
-  controls.innerHTML = `
-    <div class="left">
-      <input type="search" id="logSearch" placeholder="Search user / pill / status">
-      <label for="pageSize">Rows</label>
-      <select id="pageSize">
-        <option value="5">5</option>
-        <option value="10" selected>10</option>
-        <option value="25">25</option>
-      </select>
-    </div>
-    <div class="right">
-      <div class="log-pagination" id="logPagination"></div>
-    </div>
-  `;
-  tableWrap.parentNode.insertBefore(controls, tableWrap);
-
-  // state
-  let logsCache = [];
-  let filterText = '';
-  let sortBy = { key: 'timestamp', dir: -1 }; // -1 = desc, 1 = asc
-  let page = 1;
-  let pageSize = parseInt(document.getElementById('pageSize').value, 10);
-
-  const searchInput = document.getElementById('logSearch');
-  const pageSizeSelect = document.getElementById('pageSize');
-  const paginationEl = document.getElementById('logPagination');
-
-  // debounce helper
-  const debounce = (fn, wait=200) => {
-    let t;
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); };
-  };
-
-  // format timestamp (re-use existing helper if present)
-  function fmt(ts){
-    if (!ts) return '—';
-    if (ts < 1e12) ts = ts * 1000;
-    try { return new Date(ts).toLocaleString(); } catch { return String(ts); }
-  }
-
-  // render table from logsCache with current filter/sort/page
-  function renderLogs(){
-    if (!logTbody) return;
-    const ft = filterText.trim().toLowerCase();
-    let list = Array.isArray(logsCache) ? logsCache.slice() : [];
-
-    if (ft) {
-      list = list.filter(l => {
-        const user = (l.user || l.rfid || '').toString().toLowerCase();
-        const pill = (l.pillType || l.pill || '').toString().toLowerCase();
-        const status = (l.status || l.result || '').toString().toLowerCase();
-        return user.includes(ft) || pill.includes(ft) || status.includes(ft) || (l.timestamp || '').toString().includes(ft);
-      });
-    }
-
-    // sort
-    list.sort((a,b) => {
-      const A = a?.[sortBy.key] ?? '';
-      const B = b?.[sortBy.key] ?? '';
-      if (A === B) return 0;
-      return (A > B ? 1 : -1) * sortBy.dir;
-    });
-
-    // pagination
-    const total = list.length;
-    const pages = Math.max(1, Math.ceil(total / pageSize));
-    if (page > pages) page = pages;
-    const start = (page - 1) * pageSize;
-    const pageItems = list.slice(start, start + pageSize);
-
-    // build rows
-    if (pageItems.length === 0) {
-      logTbody.innerHTML = '<tr class="empty"><td colspan="5">No dispense logs found.</td></tr>';
-    } else {
-      logTbody.innerHTML = pageItems.map(log => {
-        const user = log.user || log.rfid || 'N/A';
-        const pillType = log.pillType || log.pill || 'N/A';
-        const qty = (typeof log.quantity !== 'undefined') ? log.quantity : (log.qty ?? 1);
-        const ts = fmt(log.timestamp ?? log.time ?? 0);
-        const status = (log.status || log.result || 'N/A').toString();
-        const statusClass = status.toLowerCase().includes('fail') ? 'fail' : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
-
-        // add data-label attributes for responsive layout
-        return `
-          <tr>
-            <td data-label="User">${escapeHtml(user)}</td>
-            <td data-label="Pill Type">${escapeHtml(pillType)}</td>
-            <td data-label="Quantity">${escapeHtml(qty)}</td>
-            <td data-label="Timestamp">${escapeHtml(ts)}</td>
-            <td data-label="Status"><span class="log-status ${statusClass}">${escapeHtml(status)}</span></td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    renderPagination(total, pages);
-  }
-
-  // render pagination controls
-  function renderPagination(total, pages){
-    if (!paginationEl) return;
-    paginationEl.innerHTML = '';
-    if (pages <= 1) return;
-
-    const prev = document.createElement('button');
-    prev.textContent = '‹ Prev';
-    prev.disabled = page <= 1;
-    prev.addEventListener('click', () => { page = Math.max(1, page-1); renderLogs(); });
-    paginationEl.appendChild(prev);
-
-    const info = document.createElement('div');
-    info.textContent = `${page} / ${pages} · ${total} rows`;
-    info.style.padding = '6px 10px';
-    paginationEl.appendChild(info);
-
-    const next = document.createElement('button');
-    next.textContent = 'Next ›';
-    next.disabled = page >= pages;
-    next.addEventListener('click', () => { page = Math.min(pages, page+1); renderLogs(); });
-    paginationEl.appendChild(next);
-  }
-
-  // set sort when header clicked
-  function setupHeaderSorting(){
-    const headers = document.querySelectorAll('.log-table thead th');
-    headers.forEach(th => {
-      const key = (th.datasetKey || th.textContent || '').toString().trim().toLowerCase();
-      // map visible headers to data keys
-      let mapKey = 'timestamp';
-      if (/user/i.test(th.textContent)) mapKey = 'rfid';
-      if (/pill/i.test(th.textContent)) mapKey = 'pillType';
-      if (/quantity/i.test(th.textContent)) mapKey = 'quantity';
-      if (/timestamp/i.test(th.textContent)) mapKey = 'timestamp';
-      if (/status/i.test(th.textContent)) mapKey = 'status';
-
-      th.addEventListener('click', () => {
-        if (sortBy.key === mapKey) sortBy.dir = -sortBy.dir;
-        else { sortBy.key = mapKey; sortBy.dir = -1; }
-        // update sort indicators
-        document.querySelectorAll('.log-table thead th .sort-ind').forEach(el => el.remove());
-        const span = document.createElement('span');
-        span.className = 'sort-ind';
-        span.textContent = sortBy.dir === -1 ? '↓' : '↑';
-        th.appendChild(span);
-        renderLogs();
-      });
+      tagIdInput.value = '';
+      tagNameInput.value = '';
+      tagPinInput.value = '';
     });
   }
 
-  // escape helper to avoid HTML injection
-  function escapeHtml(str){
-    return String(str ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-  }
-
-  // wire controls
-  searchInput.addEventListener('input', debounce(e => {
-    filterText = e.target.value || '';
-    page = 1;
-    renderLogs();
-  }, 250));
-
-  pageSizeSelect.addEventListener('change', e => {
-    pageSize = parseInt(e.target.value, 10) || 10;
-    page = 1;
-    renderLogs();
+  // --- Tags Listener ---
+  onValue(tagsRef, (snap) => {
+    const tags = snap.val() || {};
+    tagListDiv.innerHTML = Object.keys(tags).length === 0 
+      ? '<div class="muted">No tags assigned.</div>'
+      : Object.entries(tags).map(([rfid, tag]) => `
+          <div class="tag-row" data-rfid="${rfid}">
+            <span class="tag-id">${rfid}</span>
+            <span class="tag-name">${escapeHtml(tag.name || '')}</span>
+            <button class="tag-remove-btn" data-rfid="${rfid}" style="margin-left:auto;">Remove</button>
+          </div>
+        `).join('');
   });
 
-  // initialize header sorting behavior
-  setupHeaderSorting();
+  // --- Tag Removal ---
+  if (tagListDiv) {
+    tagListDiv.addEventListener('click', async (e) => {
+      const target = e.target;
+      if (target.classList.contains('tag-remove-btn')) {
+        const rfid = target.getAttribute('data-rfid');
+        if (confirm(`Remove tag ${rfid}?`)) {
+          await remove(ref(db, `/tags/${rfid}`));
+        }
+      }
+    });
+  }
 
-  // Replace the logs onValue handler with safe upsert logic
-  onValue(logsRef, (snap) => {
-    const logs = snap.val() || {};
-    const tbody = document.getElementById('log-table-body');
-    if (!tbody) return;
+  // --- Emergency Alert Modal Logic ---
+  const alertModal = document.getElementById('alertModal');
+  const alertMessage = document.getElementById('alertMessage');
+  const alertTimestamp = document.getElementById('alertTimestamp');
+  const resolveBtn = document.getElementById('resolveBtn');
+  const closeBtn = document.getElementById('closeAlertModal');
 
-    // Helper to create/update a row for a given key/log
-    function upsertRow(key, log) {
-      let tr = tbody.querySelector(`tr[data-id="${key}"]`);
-      const user = log.user || log.rfid || 'N/A';
-      const pillType = log.pillType || log.pill || 'N/A';
-      const qty = (typeof log.quantity !== 'undefined') ? log.quantity : (log.qty ?? 1);
-      const ts = (log.timestamp ?? log.time) || '';
-      const status = log.status || log.result || 'N/A';
+  function showAlertModal(message, timestamp) {
+    if (!alertModal) return;
+    alertMessage.textContent = message;
+    alertTimestamp.textContent = "Time: " + new Date(timestamp * 1000).toLocaleString();
+    alertModal.style.display = "block";
 
-      const rowHtml = `
-        <td data-label="User">${user}</td>
-        <td data-label="Pill Type">${pillType}</td>
-        <td data-label="Quantity">${qty}</td>
-        <td data-label="Timestamp">${formatTimestamp(ts)}</td>
-        <td data-label="Status"><span class="log-status ${String(status).toLowerCase()}">${status}</span></td>
-      `;
+    // --- Show browser notification if not focused ---
+    if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
+      const notification = new Notification("🚨 Emergency Alert", {
+        body: message,
+        tag: "emergency-alert",
+        requireInteraction: true // Keeps notification until user interacts
+      });
+      notification.onclick = function() {
+        window.focus();
+        alertModal.style.display = "block";
+        this.close();
+      };
+    }
+  }
 
-      if (tr) {
-        tr.innerHTML = rowHtml; // update existing row
+  // Only allow dismiss by clicking "Resolve" button
+  if (resolveBtn) resolveBtn.onclick = async () => {
+    alertModal.style.display = "none";
+    // Find and update the latest active alert in Firebase
+    onValue(alertsRef, (snap) => {
+      const alerts = snap.val() || {};
+      // Find the latest active alert
+      let latestKey = null, latestTs = 0;
+      for (const [key, val] of Object.entries(alerts)) {
+        if (val.status === "active" && (val.timestamp ?? 0) > latestTs) {
+          latestKey = key;
+          latestTs = val.timestamp ?? 0;
+        }
+      }
+      if (latestKey) {
+        set(ref(db, `/alerts/${latestKey}/status`), "resolved");
+      }
+    }, { onlyOnce: true });
+  };
+  if (closeBtn) closeBtn.onclick = () => alertModal.style.display = "none";
+
+  // --- Listen for new alerts in Firebase ---
+  onChildAdded(alertsRef, (snapshot) => {
+    const alert = snapshot.val();
+    if (alert && alert.status === "active") {
+      showAlertModal(alert.message, alert.timestamp);
+    }
+  });
+
+  // --- Request Notification Permission ---
+  if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+
+  document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible" && alertModal && alertModal.style.display === "block") {
+      alert("Emergency Alert! Please check the page.");
+    }
+  });
+
+  // --- Listen for new alerts in Firebase ---
+  onChildAdded(alertsRef, async (snapshot) => {
+    const alert = snapshot.val();
+    if (alert && alert.status === "active") {
+      // Reconstruct the payload exactly as in ESP32: "Button Pressed." + timestamp + "active"
+      const payload = "Button Pressed." + alert.timestamp + "active";
+      
+      // Compute expected HMAC
+      const expectedHash = await computeHMAC(payload, secretKey);
+      
+      // Verify hash
+      if (alert.hash === expectedHash) {
+        // Hash matches: Proceed with alert
+        showAlertModal(alert.message, alert.timestamp);
       } else {
-        tr = document.createElement('tr');
-        tr.setAttribute('data-id', key);
-        tr.innerHTML = rowHtml;
-        tbody.appendChild(tr); // append new row
+        // Hash mismatch: Log error and ignore (potential tampering)
+        console.error("Alert hash verification failed! Received hash:", alert.hash, "Expected:", expectedHash);
+        // Optionally, show a different message or alert the user
+        // showAlertModal("Security Alert: Invalid alert received", alert.timestamp);
       }
     }
-
-    // Upsert each entry returned from the DB
-    if (typeof logs === 'object' && logs !== null) {
-      Object.entries(logs).forEach(([key, log]) => {
-        upsertRow(key, log);
-      });
-    }
-
-    // NOTE: this intentionally does NOT remove rows that are not in the current snapshot.
-    // If you later want to remove stale rows, do a cleanup pass comparing existing data-ids to snapshot keys.
-  }, (err) => {
-    console.error('logs onValue error', err);
   });
-
-}); // end DOMContentLoaded
-
-window.addEventListener('load', () => {
-  console.log('Script loaded — listening for device updates.');
 });

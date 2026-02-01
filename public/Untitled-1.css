@@ -1,0 +1,71 @@
+/* Prettier Add RFID Tag Card */
+.add-tag-card {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 4px 24px 0 rgba(11,92,255,0.10), 0 1.5px 6px 0 rgba(0,0,0,0.04);
+  padding: 2.2rem 2rem 2rem 2rem;
+  margin-bottom: 1.5rem;
+  max-width: 350px;
+  margin-right: auto;
+  margin-left: auto;
+  transition: box-shadow 0.2s;
+}
+
+.add-tag-card h2 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 1.35rem;
+  margin-bottom: 1.2rem;
+  color: #0b5cff;
+  text-align: center;
+}
+
+#add-tag-form label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+  color: #222;
+  font-size: 1rem;
+}
+
+#add-tag-form input[type="text"],
+#add-tag-form input[type="password"] {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1.1rem;
+  border: 1.5px solid #dbeafe;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #f8fafc;
+  transition: border-color 0.2s;
+}
+
+#add-tag-form input[type="password"] {
+  letter-spacing: 0.2em;
+  background: #f0f6ff;
+}
+
+#add-tag-form input:focus {
+  border-color: #0b5cff;
+  outline: none;
+  background: #eaf1ff;
+}
+
+#add-tag-form button[type="submit"] {
+  width: 100%;
+  padding: 0.7rem 0;
+  background: linear-gradient(90deg, #0b5cff 60%, #3a8fff 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, box-shadow 0.18s;
+  box-shadow: 0 2px 8px 0 rgba(11,92,255,0.08);
+}
+
+#add-tag-form button[type="submit"]:hover {
+  background: linear-gradient(90deg, #3a8fff 0%, #0b5cff 100%);
+  box-shadow: 0 4px 16px 0 rgba(11,92,255,0.13);
+}

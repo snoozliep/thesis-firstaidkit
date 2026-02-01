@@ -14,46 +14,94 @@
     <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
     import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+    // *** NEW: Import Auth modules ***
+    import { 
+        getAuth, 
+        onAuthStateChanged, 
+        signInWithEmailAndPassword, 
+        signOut 
+    } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
     </script>
 </head>
 <body>
+    <div id="loginCard" class="login-popup" style="display:none;">
+      <form id="loginForm" class="login-form">
+        <h2>Sign In</h2>
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" autocomplete="username" required>
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+        <button type="submit">Login</button>
+        <div id="loginError" class="login-error"></div>
+      </form>
+    </div>
+
     <div class="page">
         <header class="site-header">
             <div class="container">
-                <h1 class="title"><a href="https://snoozliep.github.io/thesis/thesis.html">FirstAid Dispenser</a></h1>
-                <p class="subtitle">Monitoring and control interface</p>
-                <!-- <p>LCD Message: <span id="lcd-message">Loading...</span></p> -->
+                <p class="subtitle" style="font-family:'Inter',sans-serif;font-size:1.15rem;color:#444444a4;margin-top:2px;margin-left: 68px;">
+                <h1 class="title" style="font-family:'Poppins',sans-serif;font-size:2.2rem;letter-spacing:1px;">
+                FirstAid Dispenser
+                </h1>
+                    Monitoring &amp; Control Interface for Smart Pillbox
+                </p>
             </div>
         </header>
 
         <main class="container">
             <section class="grid status-grid">
+                <section class="card add-tag-card">
+                <h2>Add RFID Tag</h2>
+                <form id="add-tag-form">
+                    <label for="tag-id">Tag ID:</label>
+                    <input type="text" id="tag-id" required>
+                    <br>
+                    <label for="tag-name">Name:</label>
+                    <input type="text" id="tag-name" required>
+                    <br>
+                    <label for="tag-pin">PIN (4 digits):</label>
+                    <input type="password" id="tag-pin" pattern="\d{4}" maxlength="4" minlength="4" required>
+                    <button type="submit">Add Tag</button>
+                </form>
+                </section>
                 <article class="card user-card">
                     <h2>Current User</h2>
-                    <p class="muted">Identified by last RFID scan</p>
-                    <div class="user-id" id="user-id">— unknown —</div>
-
-                    <!-- optional existing name/edit UI (keeps compatibility) -->
-                    <div class="user-name" id="user-name" style="margin-top:10px;">
-                        <strong>Name:</strong> <span id="user-name-value">— none —</span>
+                    <div class="user-name" id="user-name" style="margin-top:26px;">
+                        <strong>Name: </strong> <span id="user-name-value">User</span>
                     </div>
+                    <div class="muted" style="margin-top:12px;">
+                    <span id="last-rfid-time">—</span>
+                    </div>
+                    <br>
+                    <div class="user-id" id="user-id">— unknown —</div>
                 </article>
 
-                <article class="card device-card">
+                <article class="card device-card" id="device-status-card">
                     <h2>Device Status</h2>
-                    <p class="muted">Real-time hardware connection</p>
+                    <p class="muted" style="margin-top:26px;">Real-time hardware connection</p>
                     <div class="badge" id="device-status-display">disconnected</div>
+                    <div id="device-status-info">
+                        <!-- Existing status info here -->
+                        <div id="device-temp-humidity">
+                          <div>Temperature: <span id="device-temp">--</span> °C</div>
+                          <div>Humidity: <span id="device-humidity">--</span> %</div>
+                        </div>
+                      </div>
                 </article>
+            </section>
 
                 <article class="card actuator-card">
                     <h2>Actuators</h2>
                     <p class="muted">Servo Statuses</p>
-                    <ul class="inline-list">
-                        <li>Servo: <span class="small-muted" id="servo-status">unknown</span></li>
-                        <li>Motor: <span class="small-muted" id="motor-status">unknown</span></li>
+                    <ul class="inline-list" style="color: black;">
+                        <li>Tube 1: <span class="small-muted" id="slot1-status">unknown</span></li>
+                        <li>Tube 2: <span class="small-muted" id="slot2-status">unknown</span></li>
+                        <li>Tube 3: <span class="small-muted" id="slot3-status">unknown</span></li>
+                        <!-- <li>Tube 4: <span class="small-muted" id="tube-status">unknown</span></li> -->
+                        <li>Lock 5: <span class="small-muted" id="slot4-status">unknown</span></li>
+                        <li>Motor 1: <span class="small-muted" id="motor-status">unknown</span></li>
                     </ul>
                 </article>
-            </section>
 
             <section class="card log-card">
                 <h2>Dispense Log</h2>
@@ -66,7 +114,9 @@
                                 <th>Pill Type</th>
                                 <th>Quantity</th>
                                 <th>Timestamp</th>
+                                <th>Error</th>
                                 <th>Status</th>
+                                <th>PIN</th>
                             </tr>
                         </thead>
                         <tbody id="log-table-body">
@@ -79,6 +129,29 @@
             </section>
         </main>
     </div>
+    <div id="alertModal" class="modal" style="display:none;">
+  <div class="modal-content">
+      <span class="close" id="closeAlertModal">&times;</span>
+      <h2>Emergency Alert</h2>
+      <p id="alertMessage"></p>
+      <p id="alertTimestamp"></p>
+      <button id="resolveBtn">Resolve</button>
+  </div>
+</div>
     <script type="module" src="./script.js"></script>
+    <script>
+document.addEventListener('DOMContentLoaded', () => {
+  const link = document.getElementById('site-title-link');
+  if (link) {
+    link.addEventListener('click', function(e) {
+      // Remove hyperlink effect after click
+      link.removeAttribute('href');
+      link.style.pointerEvents = 'none';
+      link.style.color = 'inherit';
+      link.style.textDecoration = 'none';
+    });
+  }
+});
+</script>
 </body>
 </html>
