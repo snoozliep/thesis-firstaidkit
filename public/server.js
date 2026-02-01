@@ -1,10 +1,9 @@
-// --- Clean Firebase Client with Auth, UI, and Slot Status ---
-
+// --- Firebase Client Setup ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 
-// --- Firebase Config ---
+// --- Firebase Configuration ---
 const firebaseConfig = {
   apiKey: "AIzaSyDNneb6zniUzuIfrQYBrTWW2ZrZ7cetyyQ",
   authDomain: "final-pill.firebaseapp.com",
@@ -16,29 +15,55 @@ const firebaseConfig = {
   measurementId: "G-XJ7TBXB6LX"
 };
 
-// --- Firebase Init ---
+// Secret key for HMAC (store securely in production, e.g., environment variable)
+const secretKey = "82cf459c4f576c3a075ab02b2963b240a692dac7";
+
+// HMAC Computation Function
+async function computeHMAC(data, key) {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(key);
+  const dataBuffer = encoder.encode(data);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBuffer);
+  const hashArray = Array.from(new Uint8Array(signature));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const auth = getAuth(app);
+
+// --- Database References ---
 const deviceDataRef = ref(db, '/deviceData');
 const logsRef = ref(db, '/logs');
 const tagsRef = ref(db, '/tags');
-const slotStatusRef = ref(db, '/slotStatus'); // ✅ NEW
-const auth = getAuth(app);
+const alertsRef = ref(db, '/alerts');
+const slotStatusRef = ref(db, '/slotStatus');  // For slot statuses
 
-// --- Utility ---
-function formatTimestamp(ts) {
-  if (!ts) return '—';
-  if (ts < 1e12) ts = ts * 1000;
-  try { return new Date(ts).toLocaleString(); } catch { return String(ts); }
-}
-function escapeHtml(str) {
-  return String(str ?? '').replace(/[&<>"']/g, s => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[s]));
-}
+// --- Utility Functions ---
 const el = id => document.getElementById(id);
 
-// --- DOM Ready ---
+function formatTimestamp(ts) {
+  const date = new Date(ts * 1000);
+  return date.toLocaleString();
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, s => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[s]));
+}
+
+// --- DOM Ready Event ---
 document.addEventListener('DOMContentLoaded', () => {
   // --- Elements ---
   const loginCard = el('loginCard');
@@ -53,19 +78,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const addTagForm = el('add-tag-form');
   const tagIdInput = el('tag-id');
   const tagNameInput = el('tag-name');
+  const tagPinInput = el('tag-pin');
   const tagListDiv = el('tag-list');
 
-  // --- Auth ---
+  // --- Authentication Handling ---
   onAuthStateChanged(auth, user => {
     if (user) {
-      if (loginCard) loginCard.style.display = 'none';
-      if (pageContent) pageContent.style.display = '';
+      loginCard.style.display = 'none';
+      pageContent.style.display = '';
     } else {
-      if (loginCard) loginCard.style.display = '';
-      if (pageContent) pageContent.style.display = 'none';
+      loginCard.style.display = '';
+      pageContent.style.display = 'none';
     }
   });
 
+  // --- Login Form Submission ---
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -86,21 +113,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = data?.name ?? '—';
     const rfid = data?.rfid ?? '— unknown —';
     const rawTs = Number(data?.timestamp ?? 0);
-    let tsMs = 0;
-    if (rawTs > 1000000000 && rawTs < 2000000000) tsMs = rawTs * 1000;
-    else if (rawTs > 1000000000000 && rawTs < 2000000000000) tsMs = rawTs;
+    const tsMs = (rawTs > 1e12) ? rawTs : rawTs * 1000; // Convert to milliseconds
     const now = Date.now();
-    const FRESH_MS = 30000;
-    const connected = tsMs && (now - tsMs >= 0) && (now - tsMs < FRESH_MS);
+    const connected = tsMs && (now - tsMs < 30000); // Check if connected within the last 30 seconds
 
-    if (userNameValue) userNameValue.textContent = name;
-    if (lastRfidTimeEl) lastRfidTimeEl.textContent = tsMs ? new Date(tsMs).toLocaleString() : '—';
-    if (badgeEl) {
-      badgeEl.textContent = connected ? 'connected' : 'disconnected';
-      badgeEl.classList.toggle('connected', connected);
-      badgeEl.classList.toggle('disconnected', !connected);
-    }
-    if (userIdEl) userIdEl.textContent = rfid;
+    userNameValue.textContent = name;
+    lastRfidTimeEl.textContent = tsMs ? new Date(tsMs).toLocaleString() : '—';
+    badgeEl.textContent = connected ? 'connected' : 'disconnected';
+    badgeEl.classList.toggle('connected', connected);
+    badgeEl.classList.toggle('disconnected', !connected);
+    userIdEl.textContent = rfid;
+
+    // --- Update device status card ---
+    el('device-temp').textContent = data.temperature ?? '--';
+    el('device-humidity').textContent = data.humidity ?? '--';
+
+    // --- Update slot/tube/motor status ---
+    el("slot1-status").textContent = data.slot1 ?? "unknown";
+    el("slot2-status").textContent = data.slot2 ?? "unknown";
+    el("slot3-status").textContent = data.slot3 ?? "unknown";
+    el("slot4-status").textContent = data.slot4 ?? "unknown";
+    el("motor-status").textContent = data.motor ?? "unknown";
   });
 
   // --- Logs Listener ---
@@ -108,56 +141,42 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!logTbody) return;
     const obj = snap.val() || {};
     const rows = Object.entries(obj).map(([k, v]) => ({ id: k, ...v }));
-    rows.sort((a, b) => {
-      const ta = Number(a.timestamp ?? a.time ?? 0);
-      const tb = Number(b.timestamp ?? b.time ?? 0);
-      const aMs = ta && ta < 1e12 ? ta * 1000 : ta;
-      const bMs = tb && tb < 1e12 ? tb * 1000 : tb;
-      return (bMs || 0) - (aMs || 0);
-    });
+    rows.sort((a, b) => (b.timestamp ?? b.time ?? 0) - (a.timestamp ?? a.time ?? 0));
 
-    if (rows.length === 0) {
-      logTbody.innerHTML = '<tr class="empty"><td colspan="6">No dispense logs yet.</td></tr>';
-      return;
-    }
+    logTbody.innerHTML = rows.length === 0 
+      ? '<tr class="empty"><td colspan="7">No dispense logs yet.</td></tr>'
+      : rows.map(row => {
+          const user = escapeHtml(row.user || '');
+          const pillType = escapeHtml(row.pillType || '');
+          const qty = escapeHtml(row.quantity ?? row.qty ?? 1);
+          const ts = escapeHtml(formatTimestamp(row.timestamp ?? row.time ?? 0));
+          const error = escapeHtml(row.pillType || 'N/A');
+          const status = escapeHtml(row.status || row.result || 'N/A');
+          const statusClass = status.toLowerCase().includes('fail') ? 'fail' : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
+          const pin = escapeHtml(row.pin || '');
 
-    logTbody.innerHTML = rows.map(row => {
-      const user = escapeHtml(row.user || row.rfid || 'N/A');
-      const pillType = escapeHtml(row.pill || 'N/A');
-      const qty = escapeHtml(row.quantity ?? row.qty ?? 1);
-      const ts = escapeHtml(formatTimestamp(row.timestamp ?? row.time ?? 0));
-      const error = escapeHtml(row.pillType || 'N/A');
-      const status = escapeHtml(row.status || row.result || 'N/A');
-      const statusClass = status.toLowerCase().includes('fail')
-        ? 'fail'
-        : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
-      return `
-        <tr data-id="${escapeHtml(row.id)}">
-          <td data-label="User">${user}</td>
-          <td data-label="Pill Type">${pillType}</td>
-          <td data-label="Quantity">${qty}</td>
-          <td data-label="Timestamp">${ts}</td>
-          <td data-label="Error">${error}</td>
-          <td data-label="Status"><span class="log-status ${statusClass}">${status}</span></td>
-        </tr>
-      `;
-    }).join('');
+          return `
+            <tr data-id="${escapeHtml(row.id)}">
+              <td data-label="User">${user}</td>
+              <td data-label="Pill Type">${pillType}</td>
+              <td data-label="Quantity">${qty}</td>
+              <td data-label="Timestamp">${ts}</td>
+              <td data-label="Error">${error}</td>
+              <td data-label="Status"><span class="log-status ${statusClass}">${status}</span></td>
+              <td data-label="PIN">${pin}</td>
+            </tr>
+          `;
+        }).join('');
   });
 
-  // --- ✅ Slot Status Listener (Laser sensors / photoresistors) ---
+  // --- Slot Status Listener ---
   onValue(slotStatusRef, (snap) => {
     const data = snap.val() || {};
-    const s1 = el("slot1-status");
-    const s2 = el("slot2-status");
-    const s3 = el("slot3-status");
-    const s4 = el("slot4-status");
-    const motor = el("motor-status");
-
-    if (s1) s1.textContent = data.Slot1?.status || "unknown";
-    if (s2) s2.textContent = data.Slot2?.status || "unknown";
-    if (s3) s3.textContent = data.Slot3?.status || "unknown";
-    if (s4) s4.textContent = data.Slot4?.status || "unknown";
-    if (motor) motor.textContent = data.Motor1?.status || "unknown";
+    el("slot1-status").textContent = data.Slot1?.status || "unknown";
+    el("slot2-status").textContent = data.Slot2?.status || "unknown";
+    el("slot3-status").textContent = data.Slot3?.status || "unknown";
+    el("slot4-status").textContent = data.Slot4?.status || "unknown";
+    el("motor-status").textContent = data.Motor1?.status || "unknown";
   });
 
   // --- RFID Tag Management ---
@@ -166,29 +185,39 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const rfid = tagIdInput.value.trim();
       const name = tagNameInput.value.trim();
-      if (!rfid || !name) return;
-      await set(ref(db, `/tags/${rfid}`), { name });
+      const pin = tagPinInput.value.trim();
+
+      // Validate PIN is 4 digits
+      if (!/^\d{4}$/.test(pin)) {
+        alert('PIN must be exactly 4 digits.');
+        return;
+      }
+
+      // Save to Firebase
+      const tagData = { name, pin };
+      await set(ref(db, `/tags/${rfid}`), tagData);
+
       tagIdInput.value = '';
       tagNameInput.value = '';
+      tagPinInput.value = '';
     });
   }
 
+  // --- Tags Listener ---
   onValue(tagsRef, (snap) => {
     const tags = snap.val() || {};
-    if (!tagListDiv) return;
-    if (Object.keys(tags).length === 0) {
-      tagListDiv.innerHTML = '<div class="muted">No tags assigned.</div>';
-      return;
-    }
-    tagListDiv.innerHTML = Object.entries(tags).map(([rfid, tag]) => `
-      <div class="tag-row" data-rfid="${rfid}">
-        <span class="tag-id">${rfid}</span>
-        <span class="tag-name">${escapeHtml(tag.name || '')}</span>
-        <button class="tag-remove-btn" data-rfid="${rfid}" style="margin-left:auto;">Remove</button>
-      </div>
-    `).join('');
+    tagListDiv.innerHTML = Object.keys(tags).length === 0 
+      ? '<div class="muted">No tags assigned.</div>'
+      : Object.entries(tags).map(([rfid, tag]) => `
+          <div class="tag-row" data-rfid="${rfid}">
+            <span class="tag-id">${rfid}</span>
+            <span class="tag-name">${escapeHtml(tag.name || '')}</span>
+            <button class="tag-remove-btn" data-rfid="${rfid}" style="margin-left:auto;">Remove</button>
+          </div>
+        `).join('');
   });
 
+  // --- Tag Removal ---
   if (tagListDiv) {
     tagListDiv.addEventListener('click', async (e) => {
       const target = e.target;
@@ -200,57 +229,107 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // --- Emergency Alert Modal Logic ---
+  const alertModal = document.getElementById('alertModal');
+  const alertMessage = document.getElementById('alertMessage');
+  const alertTimestamp = document.getElementById('alertTimestamp');
+  const resolveBtn = document.getElementById('resolveBtn');
+  const closeBtn = document.getElementById('closeAlertModal');
+
+  function showAlertModal(message, timestamp) {
+    if (!alertModal) return;
+    alertMessage.textContent = message;
+    alertTimestamp.textContent = "Time: " + new Date(timestamp * 1000).toLocaleString();
+    alertModal.style.display = "block";
+
+    // --- Show browser notification if not focused ---
+    if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
+      const notification = new Notification("🚨 Emergency Alert", {
+        body: message,
+        tag: "emergency-alert",
+        requireInteraction: true // Keeps notification until user interacts
+      });
+      notification.onclick = function() {
+        window.focus();
+        alertModal.style.display = "block";
+        this.close();
+      };
+    }
+  }
+
+  // Only allow dismiss by clicking "Resolve" button
+  if (resolveBtn) resolveBtn.onclick = async () => {
+    alertModal.style.display = "none";
+    // Find and update the latest active alert in Firebase
+    onValue(alertsRef, (snap) => {
+      const alerts = snap.val() || {};
+      // Find the latest active alert
+      let latestKey = null, latestTs = 0;
+      for (const [key, val] of Object.entries(alerts)) {
+        if (val.status === "active" && (val.timestamp ?? 0) > latestTs) {
+          latestKey = key;
+          latestTs = val.timestamp ?? 0;
+        }
+      }
+      if (latestKey) {
+        set(ref(db, `/alerts/${latestKey}/status`), "resolved");
+      }
+    }, { onlyOnce: true });
+  };
+  if (closeBtn) closeBtn.onclick = () => alertModal.style.display = "none";
+
+  // --- Listen for New Alerts with HMAC Verification (Only Recent Ones) ---
+  onChildAdded(alertsRef, async (snapshot) => {
+    const alert = snapshot.val();
+    if (alert && alert.status === "active") {
+      // Only show modal if alert is recent (within last 10 seconds)
+      const now = Date.now() / 1000;  // Current time in seconds
+      if (alert.timestamp > (now - 10)) {  // Adjust threshold as needed (e.g., 10 seconds)
+        // Reconstruct the payload exactly as in ESP32: "Button Pressed." + timestamp + "active"
+        const payload = "Button Pressed." + alert.timestamp + "active";
+        
+        // Compute expected HMAC
+        const expectedHash = await computeHMAC(payload, secretKey);
+        
+        // Verify hash
+        if (alert.hash === expectedHash) {
+          // Hash matches: Proceed with alert
+          showAlertModal(alert.message, alert.timestamp);
+        } else {
+          // Hash mismatch: Log error and ignore (potential tampering)
+          console.error("Alert hash verification failed! Received hash:", alert.hash, "Expected:", expectedHash);
+        }
+      }
+    }
+  });
+
+  // --- Request Notification Permission ---
+  if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+
+  document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible" && alertModal && alertModal.style.display === "block") {
+      alert("Emergency Alert! Please check the page.");
+    }
+  });
+
+  // --- Periodic Cleanup of Old Alerts ---
+  setInterval(() => {
+    const now = Date.now() / 1000;
+    onValue(alertsRef, (snap) => {
+      snap.forEach((child) => {
+        const alert = child.val();
+        if (alert.status === "active" && (now - alert.timestamp) > 300) {  // Older than 5 minutes
+          set(ref(db, `/alerts/${child.key}/status`), "resolved");
+        }
+      });
+    }, { onlyOnce: true });
+  }, 300000);  // Every 5 minutes
 });
 
+// --- Window Load Event ---
 window.addEventListener('load', () => {
   console.log('Script loaded — listening for device updates including slot statuses.');
 });
-
-// Function to display alerts
-function displayAlert(alertData) {
-  const alertsContainer = document.getElementById('alerts-container');
-  const alertDiv = document.createElement('div');
-  alertDiv.className = 'alert-item';
-  alertDiv.innerHTML = `
-    <strong>Alert:</strong> ${alertData.message}<br>
-    <small>Timestamp: ${new Date(alertData.timestamp * 1000).toLocaleString()}</small><br>
-    <small>Status: ${alertData.status}</small>
-  `;
-  alertsContainer.appendChild(alertDiv);
-}
-// Listen for new alerts from ESP32 button presses
-const alertsRef = database.ref('/alerts');
-alertsRef.on('child_added', (snapshot) => {
-  const alertData = snapshot.val();
-  displayAlert(alertData);
-  console.log('New alert received:', alertData);
-});
-// Optional: Clear old alerts after a certain time or on page load
-// Example: Remove alerts older than 1 hour
-setInterval(() => {
-  const now = Date.now() / 1000;
-  alertsRef.once('value', (snapshot) => {
-    snapshot.forEach((childSnapshot) => {
-      const alertData = childSnapshot.val();
-      if (now - alertData.timestamp > 3600) {  // 1 hour in seconds
-        childSnapshot.ref.remove();
-      }
-    });
-  });
-}, 60000);  // Check every minute
-
-// Example function to acknowledge an alert
-function acknowledgeAlert() {
-    const acknowledgmentRef = ref(db, '/acknowledgment');
-    set(acknowledgmentRef, 'acknowledged')
-        .then(() => {
-            console.log('Alert acknowledged.');
-        })
-        .catch((error) => {
-            console.error('Error acknowledging alert:', error);
-        });
-}
-
-// Call this function when the user acknowledges an alert
-document.getElementById('acknowledge-button').addEventListener('click', acknowledgeAlert);
-
