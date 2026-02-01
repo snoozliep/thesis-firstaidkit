@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rows.sort((a, b) => (b.timestamp ?? b.time ?? 0) - (a.timestamp ?? a.time ?? 0));
 
     logTbody.innerHTML = rows.length === 0 
-      ? '<tr class="empty"><td colspan="6">No dispense logs yet.</td></tr>'
+      ? '<tr class="empty"><td colspan="7">No dispense logs yet.</td></tr>'
       : rows.map(row => {
           const user = escapeHtml(row.user || '');
           const pillType = escapeHtml(row.pillType || '');
@@ -266,16 +266,27 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   if (closeBtn) closeBtn.onclick = () => alertModal.style.display = "none";
 
-  // --- Listen for New Alerts with HMAC Verification ---
+  // --- Listen for New Alerts with HMAC Verification (Only Recent Ones) ---
   onChildAdded(alertsRef, async (snapshot) => {
     const alert = snapshot.val();
     if (alert && alert.status === "active") {
-      const payload = "Button Pressed." + alert.timestamp + "active";
-      const expectedHash = await computeHMAC(payload, secretKey);
-      if (alert.hash === expectedHash) {
-        showAlertModal(alert.message, alert.timestamp);
-      } else {
-        console.error("Alert hash verification failed! Received:", alert.hash, "Expected:", expectedHash);
+      // Only show modal if alert is recent (within last 10 seconds)
+      const now = Date.now() / 1000;  // Current time in seconds
+      if (alert.timestamp > (now - 10)) {  // Adjust threshold as needed (e.g., 10 seconds)
+        // Reconstruct the payload exactly as in ESP32: "Button Pressed." + timestamp + "active"
+        const payload = "Button Pressed." + alert.timestamp + "active";
+        
+        // Compute expected HMAC
+        const expectedHash = await computeHMAC(payload, secretKey);
+        
+        // Verify hash
+        if (alert.hash === expectedHash) {
+          // Hash matches: Proceed with alert
+          showAlertModal(alert.message, alert.timestamp);
+        } else {
+          // Hash mismatch: Log error and ignore (potential tampering)
+          console.error("Alert hash verification failed! Received hash:", alert.hash, "Expected:", expectedHash);
+        }
       }
     }
   });
@@ -290,4 +301,22 @@ document.addEventListener('DOMContentLoaded', () => {
       alert("Emergency Alert! Please check the page.");
     }
   });
+
+  // --- Periodic Cleanup of Old Alerts ---
+  setInterval(() => {
+    const now = Date.now() / 1000;
+    onValue(alertsRef, (snap) => {
+      snap.forEach((child) => {
+        const alert = child.val();
+        if (alert.status === "active" && (now - alert.timestamp) > 300) {  // Older than 5 minutes
+          set(ref(db, `/alerts/${child.key}/status`), "resolved");
+        }
+      });
+    }, { onlyOnce: true });
+  }, 300000);  // Every 5 minutes
+});
+
+// --- Window Load Event ---
+window.addEventListener('load', () => {
+  console.log('Script loaded — listening for device updates including slot statuses.');
 });
