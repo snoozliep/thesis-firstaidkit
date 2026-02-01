@@ -112,10 +112,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = data?.name ?? '—';
     const rfid = data?.rfid ?? '— unknown —';
     const rawTs = Number(data?.timestamp ?? 0);
-    const tsMs = (rawTs > 1e12) ? rawTs : rawTs * 1000;
+    const tsMs = (rawTs > 1e12) ? rawTs : rawTs * 1000; // Convert to milliseconds
     const now = Date.now();
-    // Updated: Check if timestamp is within 5 minutes (300000 ms) for "connected" status
-    const connected = tsMs && (now - tsMs < 300000);  // 5 minutes threshold
+    const connected = tsMs && (now - tsMs < 30000); // Check if connected within the last 30 seconds
 
     userNameValue.textContent = name;
     lastRfidTimeEl.textContent = tsMs ? new Date(tsMs).toLocaleString() : '—';
@@ -124,18 +123,22 @@ document.addEventListener('DOMContentLoaded', () => {
     badgeEl.classList.toggle('disconnected', !connected);
     userIdEl.textContent = rfid;
 
-    // Update device status card
+    // --- Update device status card ---
     el('device-temp').textContent = data.temperature ?? '--';
     el('device-humidity').textContent = data.humidity ?? '--';
+
+    // --- Update slot/tube/motor status ---
     el("slot1-status").textContent = data.slot1 ?? "unknown";
     el("slot2-status").textContent = data.slot2 ?? "unknown";
     el("slot3-status").textContent = data.slot3 ?? "unknown";
     el("slot4-status").textContent = data.slot4 ?? "unknown";
     el("motor-status").textContent = data.motor ?? "unknown";
 
-    // Display last RFID and tag scanned
+    // --- Display last RFID and tag scanned ---
     if (el('last-rfid')) el('last-rfid').textContent = data.rfid ?? '--';
     if (el('last-tag')) el('last-tag').textContent = data.name ?? '--';
+
+    // --- Display last temperature and humidity recorded ---
     if (el('last-temp')) el('last-temp').textContent = data.temperature ?? '--';
     if (el('last-humidity')) el('last-humidity').textContent = data.humidity ?? '--';
   });
@@ -148,30 +151,30 @@ document.addEventListener('DOMContentLoaded', () => {
     rows.sort((a, b) => (b.timestamp ?? b.time ?? 0) - (a.timestamp ?? a.time ?? 0));
 
     logTbody.innerHTML = rows.length === 0 
-      ? '<tr class="empty"><td colspan="7">No dispense logs yet.</td></tr>'
+      ? '<tr class="empty"><td colspan="7">No dispense logs yet.</td></tr>'  // Updated to 7 columns
       : rows.map(row => {
-        const user = escapeHtml(row.user || '');
-        const pillType = escapeHtml(row.pillName || row.pillType || '');  // Pill name for Pill Type
-        const qty = escapeHtml(row.quantity ?? row.qty ?? 1);
-        const ts = escapeHtml(formatTimestamp(row.timestamp ?? row.time ?? 0));
-        const error = escapeHtml(row.status === 'failed' ? row.pillType : 'N/A');  // Reason for Error on failed
-        const status = escapeHtml(row.status || row.result || 'N/A');
-        const statusClass = status.toLowerCase().includes('fail') ? 'fail' : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
-        const pin = escapeHtml(row.pin || '');
+          const user = escapeHtml(row.user || '');
+          const pillType = escapeHtml(row.status === 'success' ? (row.pillName || row.pillType) : 'N/A');  // Fixed: Show pill name for success, N/A for failed
+          const qty = escapeHtml(row.quantity ?? row.qty ?? 1);
+          const ts = escapeHtml(formatTimestamp(row.timestamp ?? row.time ?? 0));
+          const error = escapeHtml(row.status === 'failed' ? row.pillType : 'N/A');  // Error shows reason for failed
+          const status = escapeHtml(row.status || row.result || 'N/A');
+          const statusClass = status.toLowerCase().includes('fail') ? 'fail' : (status.toLowerCase().includes('ok') || status.toLowerCase().includes('success') ? 'ok' : 'pending');
+          const pin = escapeHtml(row.pin || '');
 
-  return `
-    <tr data-id="${escapeHtml(row.id)}">
-      <td data-label="User">${user}</td>
-      <td data-label="Pill Type">${pillType}</td>
-      <td data-label="Quantity">${qty}</td>
-      <td data-label="Timestamp">${ts}</td>
-      <td data-label="Error">${error}</td>
-      <td data-label="Status"><span class="log-status ${statusClass}">${status}</span></td>
-      <td data-label="PIN">${pin}</td>
-    </tr>
-  `;
-}).join('');
-
+          return `
+            <tr data-id="${escapeHtml(row.id)}">
+              <td data-label="User">${user}</td>
+              <td data-label="Pill Type">${pillType}</td>
+              <td data-label="Quantity">${qty}</td>
+              <td data-label="Timestamp">${ts}</td>
+              <td data-label="Error">${error}</td>
+              <td data-label="Status"><span class="log-status ${statusClass}">${status}</span></td>
+              <td data-label="PIN">${pin}</td>
+            </tr>
+          `;
+        }).join('');
+  });
 
   // --- RFID Tag Management ---
   if (addTagForm) {
@@ -181,11 +184,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const name = tagNameInput.value.trim();
       const pin = tagPinInput.value.trim();
 
+      // Validate PIN is 4 digits
       if (!/^\d{4}$/.test(pin)) {
         alert('PIN must be exactly 4 digits.');
         return;
       }
 
+      // Save to Firebase
       const tagData = { name, pin };
       await set(ref(db, `/tags/${rfid}`), tagData);
 
@@ -235,11 +240,12 @@ document.addEventListener('DOMContentLoaded', () => {
     alertTimestamp.textContent = "Time: " + new Date(timestamp * 1000).toLocaleString();
     alertModal.style.display = "block";
 
+    // --- Show browser notification if not focused ---
     if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
       const notification = new Notification("🚨 Emergency Alert", {
         body: message,
         tag: "emergency-alert",
-        requireInteraction: true
+        requireInteraction: true // Keeps notification until user interacts
       });
       notification.onclick = function() {
         window.focus();
@@ -249,10 +255,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Only allow dismiss by clicking "Resolve" button
   if (resolveBtn) resolveBtn.onclick = async () => {
     alertModal.style.display = "none";
+    // Find and update the latest active alert in Firebase
     onValue(alertsRef, (snap) => {
       const alerts = snap.val() || {};
+      // Find the latest active alert
       let latestKey = null, latestTs = 0;
       for (const [key, val] of Object.entries(alerts)) {
         if (val.status === "active" && (val.timestamp ?? 0) > latestTs) {
@@ -267,28 +276,13 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   if (closeBtn) closeBtn.onclick = () => alertModal.style.display = "none";
 
-  // --- Listen for New Alerts with HMAC Verification (Only Recent Ones) ---
-  onChildAdded(alertsRef, async (snapshot) => {
-  console.log('New alert received:', snapshot.val());  // Debug log
-  const alert = snapshot.val();
-  if (alert && alert.status === "active") {
-    const now = Date.now() / 1000;
-    if (alert.timestamp > (now - 60)) {  // Increased to 60 seconds for delay tolerance
-      const payload = "Button Pressed." + alert.timestamp + "active";
-      const expectedHash = await computeHMAC(payload, secretKey);
-      if (alert.hash === expectedHash) {
-        console.log('Hash verified, showing modal');  // Debug log
-        showAlertModal(alert.message, alert.timestamp);
-      } else {
-        console.error("Alert hash verification failed! Received:", alert.hash, "Expected:", expectedHash);
-      }
-    } else {
-      console.log('Alert too old, ignored:', alert.timestamp);
+  // --- Listen for new alerts in Firebase ---
+  onChildAdded(alertsRef, (snapshot) => {
+    const alert = snapshot.val();
+    if (alert && alert.status === "active") {
+      showAlertModal(alert.message, alert.timestamp);
     }
-  }
-}, (error) => {
-  console.error('Firebase alerts error:', error);
-});
+  });
 
   // --- Request Notification Permission ---
   if ("Notification" in window && Notification.permission !== "granted") {
@@ -300,19 +294,6 @@ document.addEventListener('DOMContentLoaded', () => {
       alert("Emergency Alert! Please check the page.");
     }
   });
-
-  // --- Periodic Cleanup of Old Alerts ---
-  setInterval(() => {
-    const now = Date.now() / 1000;
-    onValue(alertsRef, (snap) => {
-      snap.forEach((child) => {
-        const alert = child.val();
-        if (alert.status === "active" && (now - alert.timestamp) > 300) {  // Older than 5 minutes
-          set(ref(db, `/alerts/${child.key}/status`), "resolved");
-        }
-      });
-    }, { onlyOnce: true });
-  }, 300000);  // Every 5 minutes
 });
 
 // --- Window Load Event ---
