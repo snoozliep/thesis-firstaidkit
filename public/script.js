@@ -1,5 +1,4 @@
 // --- Firebase Client Setup ---
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getDatabase, ref, onValue, set, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
@@ -16,15 +15,15 @@ const firebaseConfig = {
   measurementId: "G-XJ7TBXB6LX"
 };
 
-//secret key//
+// Secret key for HMAC (store securely in production, e.g., environment variable)
 const secretKey = "82cf459c4f576c3a075ab02b2963b240a692dac7";
-//HMAC Comms
+
+// HMAC Computation Function
 async function computeHMAC(data, key) {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(key);
   const dataBuffer = encoder.encode(data);
 
-  // Import key for HMAC
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
     keyData,
@@ -33,11 +32,8 @@ async function computeHMAC(data, key) {
     ['sign']
   );
   
-  // Compute HMAC
   const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBuffer);
   const hashArray = Array.from(new Uint8Array(signature));
-  
-  // Convert to hex string (lowercase to match ESP32 output)
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -116,9 +112,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = data?.name ?? '—';
     const rfid = data?.rfid ?? '— unknown —';
     const rawTs = Number(data?.timestamp ?? 0);
-    const tsMs = (rawTs > 1e12) ? rawTs : rawTs * 1000; // Convert to milliseconds
+    const tsMs = (rawTs > 1e12) ? rawTs : rawTs * 1000;
     const now = Date.now();
-    const connected = tsMs && (now - tsMs < 30000); // Check if connected within the last 30 seconds
+    const connected = tsMs && (now - tsMs < 30000);
 
     userNameValue.textContent = name;
     lastRfidTimeEl.textContent = tsMs ? new Date(tsMs).toLocaleString() : '—';
@@ -127,22 +123,18 @@ document.addEventListener('DOMContentLoaded', () => {
     badgeEl.classList.toggle('disconnected', !connected);
     userIdEl.textContent = rfid;
 
-    // --- Update device status card ---
+    // Update device status card
     el('device-temp').textContent = data.temperature ?? '--';
     el('device-humidity').textContent = data.humidity ?? '--';
-
-    // --- Update slot/tube/motor status ---
     el("slot1-status").textContent = data.slot1 ?? "unknown";
     el("slot2-status").textContent = data.slot2 ?? "unknown";
     el("slot3-status").textContent = data.slot3 ?? "unknown";
     el("slot4-status").textContent = data.slot4 ?? "unknown";
     el("motor-status").textContent = data.motor ?? "unknown";
 
-    // --- Display last RFID and tag scanned ---
+    // Display last RFID and tag scanned
     if (el('last-rfid')) el('last-rfid').textContent = data.rfid ?? '--';
     if (el('last-tag')) el('last-tag').textContent = data.name ?? '--';
-
-    // --- Display last temperature and humidity recorded ---
     if (el('last-temp')) el('last-temp').textContent = data.temperature ?? '--';
     if (el('last-humidity')) el('last-humidity').textContent = data.humidity ?? '--';
   });
@@ -180,16 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
   });
 
-  // --- REMOVE Slot Status Listener (no longer needed) ---
-  // onValue(slotStatusRef, (snap) => {
-  //   const data = snap.val() || {};
-  //   el("slot1-status").textContent = data.Slot1?.status || "unknown";
-  //   el("slot2-status").textContent = data.Slot2?.status || "unknown";
-  //   el("slot3-status").textContent = data.Slot3?.status || "unknown";
-  //   el("slot4-status").textContent = data.Slot4?.status || "unknown";
-  //   el("motor-status").textContent = data.Motor1?.status || "unknown";
-  // });
-
   // --- RFID Tag Management ---
   if (addTagForm) {
     addTagForm.addEventListener('submit', async (e) => {
@@ -198,13 +180,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const name = tagNameInput.value.trim();
       const pin = tagPinInput.value.trim();
 
-      // Validate PIN is 4 digits
       if (!/^\d{4}$/.test(pin)) {
         alert('PIN must be exactly 4 digits.');
         return;
       }
 
-      // Save to Firebase
       const tagData = { name, pin };
       await set(ref(db, `/tags/${rfid}`), tagData);
 
@@ -254,12 +234,11 @@ document.addEventListener('DOMContentLoaded', () => {
     alertTimestamp.textContent = "Time: " + new Date(timestamp * 1000).toLocaleString();
     alertModal.style.display = "block";
 
-    // --- Show browser notification if not focused ---
     if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
       const notification = new Notification("🚨 Emergency Alert", {
         body: message,
         tag: "emergency-alert",
-        requireInteraction: true // Keeps notification until user interacts
+        requireInteraction: true
       });
       notification.onclick = function() {
         window.focus();
@@ -269,13 +248,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Only allow dismiss by clicking "Resolve" button
   if (resolveBtn) resolveBtn.onclick = async () => {
     alertModal.style.display = "none";
-    // Find and update the latest active alert in Firebase
     onValue(alertsRef, (snap) => {
       const alerts = snap.val() || {};
-      // Find the latest active alert
       let latestKey = null, latestTs = 0;
       for (const [key, val] of Object.entries(alerts)) {
         if (val.status === "active" && (val.timestamp ?? 0) > latestTs) {
@@ -290,11 +266,17 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   if (closeBtn) closeBtn.onclick = () => alertModal.style.display = "none";
 
-  // --- Listen for new alerts in Firebase ---
-  onChildAdded(alertsRef, (snapshot) => {
+  // --- Listen for New Alerts with HMAC Verification ---
+  onChildAdded(alertsRef, async (snapshot) => {
     const alert = snapshot.val();
     if (alert && alert.status === "active") {
-      showAlertModal(alert.message, alert.timestamp);
+      const payload = "Button Pressed." + alert.timestamp + "active";
+      const expectedHash = await computeHMAC(payload, secretKey);
+      if (alert.hash === expectedHash) {
+        showAlertModal(alert.message, alert.timestamp);
+      } else {
+        console.error("Alert hash verification failed! Received:", alert.hash, "Expected:", expectedHash);
+      }
     }
   });
 
@@ -306,29 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "visible" && alertModal && alertModal.style.display === "block") {
       alert("Emergency Alert! Please check the page.");
-    }
-  });
-
-  // --- Listen for new alerts in Firebase ---
-  onChildAdded(alertsRef, async (snapshot) => {
-    const alert = snapshot.val();
-    if (alert && alert.status === "active") {
-      // Reconstruct the payload exactly as in ESP32: "Button Pressed." + timestamp + "active"
-      const payload = "Button Pressed." + alert.timestamp + "active";
-      
-      // Compute expected HMAC
-      const expectedHash = await computeHMAC(payload, secretKey);
-      
-      // Verify hash
-      if (alert.hash === expectedHash) {
-        // Hash matches: Proceed with alert
-        showAlertModal(alert.message, alert.timestamp);
-      } else {
-        // Hash mismatch: Log error and ignore (potential tampering)
-        console.error("Alert hash verification failed! Received hash:", alert.hash, "Expected:", expectedHash);
-        // Optionally, show a different message or alert the user
-        // showAlertModal("Security Alert: Invalid alert received", alert.timestamp);
-      }
     }
   });
 });
