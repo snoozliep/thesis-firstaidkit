@@ -114,7 +114,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawTs = Number(data?.timestamp ?? 0);
     const tsMs = (rawTs > 1e12) ? rawTs : rawTs * 1000;
     const now = Date.now();
-    const connected = tsMs && (now - tsMs < 30000);
+    // Updated: Check if timestamp is within 5 minutes (300000 ms) for "connected" status
+    const connected = tsMs && (now - tsMs < 300000);  // 5 minutes threshold
 
     userNameValue.textContent = name;
     lastRfidTimeEl.textContent = tsMs ? new Date(tsMs).toLocaleString() : '—';
